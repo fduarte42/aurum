@@ -22,56 +22,55 @@ class PdoConnection
 
     public function beginTransaction(string $uowId = 'default'): void
     {
-        // always start a new transaction
         if (!$this->pdo->inTransaction()) {
             $this->pdo->beginTransaction();
         }
 
-        if ($this->transactionActiveForUow[$uowId] ?? false) {
-            $this->transactionActiveForUow[$uowId] = $this->getSavepointName($uowId, $this->transactionActiveForUow[$uowId]);;
-            $this->pdo->exec("SAVEPOINT {$this->transactionActiveForUow[$uowId]}");
+        if (empty($this->transactionActiveForUow[$uowId])) {
+            $savepoint = $this->getSavepointName($uowId);
+            $this->pdo->exec("SAVEPOINT $savepoint");
+            $this->transactionActiveForUow[$uowId] = $savepoint;
         }
-    }
-
-    private function isAnySavePointActive(): bool {
-        return array_reduce(
-            $this->transactionActiveForUow,
-            fn($transactionActive, $uowTransactionActive) => $transactionActive || ($uowTransactionActive !== false),
-            false
-        );
     }
 
     public function commit(string $uowId = 'default'): void
     {
-        if ($this->transactionActiveForUow[$uowId] ?? false) {
+        if (empty($this->transactionActiveForUow[$uowId])) {
             throw new \RuntimeException("No active transaction for UnitOfWork: $uowId");
         }
 
+        $savepoint = $this->transactionActiveForUow[$uowId];
+        $this->pdo->exec("RELEASE SAVEPOINT $savepoint");
         $this->transactionActiveForUow[$uowId] = false;
-        $this->pdo->exec("RELEASE SAVEPOINT {$this->transactionActiveForUow[$uowId]}");
 
-        if ( ! $this->isAnySavePointActive() ) {
+        if (!$this->isAnySavePointActive()) {
             $this->pdo->commit();
         }
     }
 
     public function rollBack(string $uowId = 'default'): void
     {
-        if ($this->transactionActiveForUow[$uowId] ?? false) {
+        if (empty($this->transactionActiveForUow[$uowId])) {
             throw new \RuntimeException("No active transaction for UnitOfWork: $uowId");
         }
 
+        $savepoint = $this->transactionActiveForUow[$uowId];
+        $this->pdo->exec("ROLLBACK TO SAVEPOINT $savepoint");
         $this->transactionActiveForUow[$uowId] = false;
-        $this->pdo->exec("ROLLBACK TO SAVEPOINT {$this->transactionActiveForUow[$uowId]}");
 
-        if ( ! $this->isAnySavePointActive() ) {
+        if (!$this->isAnySavePointActive()) {
             $this->pdo->rollBack();
         }
     }
 
-    private function getSavepointName(string $uowId, int $index): string
+    private function isAnySavePointActive(): bool
     {
-        return 'SP_' . preg_replace('/\W+/', '_', $uowId) . '_' . $index;
+        return array_any($this->transactionActiveForUow, fn($sp) => $sp !== false);
+    }
+
+    private function getSavepointName(string $uowId): string
+    {
+        return 'SP_' . preg_replace('/\W+/', '_', $uowId);
     }
 
     // PDO Wrapper
