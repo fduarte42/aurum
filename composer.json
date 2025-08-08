@@ -1,0 +1,14 @@
+{
+  "name": "fduarte42/aurum",
+  "description": "Doctrine-inspired ORM with UnitOfWork and relations",
+  "type": "library",
+  "autoload": {
+    "psr-4": {
+      "Fduarte42\\Aurum\\": "src/"
+    }
+  },
+  "require": {
+    "php": ">=8.4"
+  },
+  "license": "MIT"
+}
