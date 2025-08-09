@@ -10,18 +10,18 @@ use Throwable;
 
 class UnitOfWork
 {
-    private ConnectionInterface $conn;
+    protected private(set) ConnectionInterface $conn;
 
-    private string $uowId;
+    protected private(set)  string $uowId;
 
-    private SplObjectStorage $new;
+    protected private(set)  SplObjectStorage $new;
 
-    private SplObjectStorage $managedObjects;
+    protected private(set)  SplObjectStorage $managedObjects;
 
     /** @var array<string,array> */ // oid => snapshot
-    private array $snapshots = [];
+    protected private(set)  array $snapshots = [];
 
-    private SplObjectStorage $removed ;
+    protected private(set)  SplObjectStorage $removed ;
 
     /**
      * Safely escapes a database identifier (table or column name)
@@ -37,6 +37,9 @@ class UnitOfWork
     {
         $this->conn = $conn;
         $this->uowId = $uowId;
+        $this->managedObjects = new SplObjectStorage();
+        $this->new = new SplObjectStorage();
+        $this->removed = new SplObjectStorage();
     }
 
     public function persist( object $entity ): void
@@ -79,7 +82,7 @@ class UnitOfWork
         return $this->managedObjects->contains( $entity );
     }
 
-    private function isNew( object $entity ): bool
+    public function isNew( object $entity ): bool
     {
         return $this->new->contains( $entity );
     }

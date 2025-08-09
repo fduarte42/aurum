@@ -3,7 +3,7 @@
 namespace Fduarte42\Aurum;
 
 use Fduarte42\Aurum\Connection\ConnectionInterface;
-use Fduarte42\Aurum\Metadata\ClassMetadata;
+use Fduarte42\Aurum\Metadata\ClassMetaData;
 use Fduarte42\Aurum\Repository\Repository;
 use Fduarte42\Aurum\UnitOfWork\UnitOfWork;
 use ReflectionClass;
@@ -18,7 +18,7 @@ final class EntityManager {
     /** @var array<string, UnitOfWork> */
     private array $uows = [];
 
-    /** @var array<string, ClassMetadata> */
+    /** @var array<string, ClassMetaData> */
     private array $metadataCache = [];
 
     public function __construct( ConnectionInterface $conn) {
@@ -34,8 +34,8 @@ final class EntityManager {
     /**
      * @throws ReflectionException
      */
-    public function getClassMetadata(string $class): ClassMetadata {
-        return $this->metadataCache[$class] ??= new ClassMetadata($class);
+    public function getClassMetadata(string $class): ClassMetaData {
+        return $this->metadataCache[$class] ??= new ClassMetaData( $class);
     }
 
     public function getUnitOfWork(string $uowId = 'default'): UnitOfWork

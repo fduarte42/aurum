@@ -11,5 +11,16 @@
     "php": ">=8.4",
     "ext-pdo": "*"
   },
-  "license": "MIT"
+  "require-dev": {
+    "pestphp/pest": "^2.0"
+  },
+  "license": "MIT",
+  "config": {
+    "allow-plugins": {
+      "pestphp/pest-plugin": true
+    }
+  },
+  "scripts": {
+    "qa": "vendor/bin/pest tests"
+  }
 }

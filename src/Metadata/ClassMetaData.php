@@ -11,7 +11,7 @@ use ReflectionClass;
 use ReflectionException;
 use ReflectionProperty;
 
-class ClassMetadata
+class ClassMetaData
 {
     public string $class;
     public string $table;
