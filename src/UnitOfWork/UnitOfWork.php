@@ -2,275 +2,305 @@
 
 namespace Fduarte42\Aurum\UnitOfWork;
 
-use Fduarte42\Aurum\Connection\PdoConnection;
-use ReflectionClass;
 
-class UnitOfWork {
-    private PdoConnection $conn;
+use Fduarte42\Aurum\Connection\ConnectionInterface;
+use ReflectionClass;
+use SplObjectStorage;
+use Throwable;
+
+class UnitOfWork
+{
+    private ConnectionInterface $conn;
+
     private string $uowId;
-    /** @var array<object> */
-    private array $new = [];
-    /** @var array<string,object> */ // oid => object
-    private array $managedObjects = [];
-    /** @var array<string,array> */ // oid => original snapshot
-    private array $managed = [];
+
+    private SplObjectStorage $new;
+
+    private SplObjectStorage $managedObjects;
+
     /** @var array<string,array> */ // oid => snapshot
     private array $snapshots = [];
-    /** @var array<object> */
-    private array $removed = [];
-    
+
+    private SplObjectStorage $removed ;
+
     /**
      * Safely escapes a database identifier (table or column name)
      * to prevent SQL injection attacks
      */
-    private function escapeIdentifier(string $identifier): string {
+    private function escapeIdentifier( string $identifier ): string
+    {
         // Replace backticks with nothing and then wrap in backticks
-        return '`' . str_replace('`', '', $identifier) . '`';
+        return '`' . str_replace( '`', '', $identifier ) . '`';
     }
 
-    public function __construct(PdoConnection $conn, string $uowId = 'default') { 
-        $this->conn = $conn; 
+    public function __construct( ConnectionInterface $conn, string $uowId = 'default' )
+    {
+        $this->conn = $conn;
         $this->uowId = $uowId;
     }
 
-    public function persist(object $entity): void {
-        if ($this->isManaged($entity) || $this->isNew($entity)) return;
-        $this->new[spl_object_hash($entity)] = $entity;
+    public function persist( object $entity ): void
+    {
+        if ( $this->isManaged( $entity ) || $this->isNew( $entity ) ) {
+            return;
+        }
+        $this->new->attach( $entity );
     }
 
-    public function remove(object $entity): void {
-        $oid = spl_object_hash($entity);
-        unset($this->new[$oid]);
-        $this->removed[$oid] = $entity;
+    public function remove( object $entity ): void
+    {
+        if ($this->isNew( $entity )) {
+            $this->new->detach( $entity );
+        } elseif ($this->isManaged( $entity )) {
+            $this->managedObjects->detach( $entity );
+            $this->removed->attach($entity);
+        }
     }
 
-    public function registerManaged(object $entity): void {
-        $oid = spl_object_hash($entity);
-        $this->managedObjects[$oid] = $entity;
-        $snapshot = $this->snapshot($entity);
-        $this->managed[$oid] = $snapshot;
-        $this->snapshots[$oid] = $snapshot;
+    public function registerManaged( object $entity ): void
+    {
+        $this->managedObjects->attach( $entity );
+        $snapshot = $this->snapshot( $entity );
+        $this->snapshots[ $this->managedObjects->getHash($entity) ] = $snapshot;
     }
 
-    private function snapshot(object $e): array {
+    private function snapshot( object $entity ): array
+    {
         $r = [];
-        $rc = new ReflectionClass($e);
-        foreach ($rc->getProperties() as $p) {
-            $r[$p->getName()] = $p->getValue($e);
+        $rc = new ReflectionClass( $entity );
+        foreach ( $rc->getProperties() as $p ) {
+            $r[ $p->getName() ] = $p->getValue( $entity );
         }
         return $r;
     }
 
-    private function isManaged(object $e): bool {
-        return isset($this->managed[spl_object_hash($e)]);
-    }
-    private function isNew(object $e): bool {
-        return isset($this->new[spl_object_hash($e)]);
+    private function isManaged( object $entity ): bool
+    {
+        return $this->managedObjects->contains( $entity );
     }
 
-    public function flush(array $classesMetadata): void {
-        $this->conn->beginTransaction($this->uowId);
+    private function isNew( object $entity ): bool
+    {
+        return $this->new->contains( $entity );
+    }
+
+    public function clear(): void
+    {
+        $this->managedObjects = new SplObjectStorage();
+        $this->snapshots = [];
+        $this->removed = new SplObjectStorage();
+        $this->new = new SplObjectStorage();
+    }
+
+    /**
+     * @throws Throwable
+     */
+    public function flush( array $classesMetadata ): void
+    {
+        $this->conn->beginTransaction( $this->uowId );
         try {
-            // Update snapshots before processing
-            foreach ($this->managedObjects as $oid => $entity) {
-                $this->snapshots[$oid] = $this->snapshot($entity);
-            }
-            
             // Process relations for new entities
-            foreach ($this->new as $entity) {
-                $this->processRelations($entity, $classesMetadata);
+            foreach ( $this->new as $entity ) {
+                $this->processRelations( $entity, $classesMetadata );
             }
-            
-            // Process relations for managed entities
-            foreach ($this->managedObjects as $entity) {
-                $this->processRelations($entity, $classesMetadata);
-            }
-            
-            // INSERT new
-            foreach ($this->new as $entity) {
-                $this->doInsert($entity, $classesMetadata);
-            }
-            
-            // UPDATE managed (diff)
-            foreach ($this->managed as $oid => $originalSnapshot) {
-                $entity = $this->getObjectByOid($oid);
-                if (!$entity) continue;
-                $currentSnapshot = $this->snapshots[$oid] ?? [];
-                $this->doUpdateIfNeeded($entity, $originalSnapshot, $currentSnapshot, $classesMetadata);
-            }
-            
-            // DELETE removed
-            foreach ($this->removed as $entity) {
-                $this->doDelete($entity, $classesMetadata);
-            }
-            
-            $this->conn->commit($this->uowId);
 
-            // post flush bookkeeping
-            foreach ($this->new as $entity) {
-                $this->registerManaged($entity);
+            // Process relations for managed entities
+            foreach ( $this->managedObjects as $entity ) {
+                $this->processRelations( $entity, $classesMetadata );
             }
-            $this->new = [];
-            
-            foreach ($this->removed as $entity) {
-                $oid = spl_object_hash($entity);
-                unset($this->managed[$oid]);
-                unset($this->managedObjects[$oid]);
-                unset($this->snapshots[$oid]);
+
+            // INSERT new
+            foreach ( $this->new as $entity ) {
+                $this->doInsert( $entity, $classesMetadata );
             }
-            $this->removed = [];
-            
-            // refresh original snapshots for managed
-            foreach ($this->managedObjects as $oid => $entity) {
-                $this->managed[$oid] = $this->snapshot($entity);
+
+            // UPDATE managed (diff)
+            foreach ( $this->managedObjects as $entity ) {
+                $originalSnapshot = $this->snapshots[$this->managedObjects->getHash( $entity )];
+                $currentSnapshot = $this->snapshot( $entity );
+                $this->doUpdateIfNeeded( $entity, $originalSnapshot, $currentSnapshot, $classesMetadata );
             }
-        } catch (\Throwable $ex) {
-            $this->conn->rollBack($this->uowId);
+
+            // DELETE removed
+            foreach ( $this->removed as $entity ) {
+                $this->doDelete( $entity, $classesMetadata );
+            }
+
+            $this->conn->commit( $this->uowId );
+            $this->clear();
+        } catch ( Throwable $ex ) {
+            $this->conn->rollBack( $this->uowId );
             throw $ex;
         }
     }
-    
-    private function processRelations(object $entity, array $classesMetadata): void {
-        $class = get_class($entity);
-        if (!isset($classesMetadata[$class])) return;
-        
-        $meta = $classesMetadata[$class];
-        if (empty($meta->relations)) return;
-        
-        foreach ($meta->relations as $propertyName => $relation) {
-            $prop = $meta->fields[$propertyName];
-            $value = $prop->getValue($entity);
-            
-            if ($relation['type'] === 'oneToMany' && is_array($value)) {
-                foreach ($value as $relatedEntity) {
-                    if (is_object($relatedEntity)) {
-                        $this->persist($relatedEntity);
+
+    private function processRelations( object $entity, array $classesMetadata ): void
+    {
+        $class = get_class( $entity );
+        if ( ! isset( $classesMetadata[ $class ] ) ) {
+            return;
+        }
+
+        $meta = $classesMetadata[ $class ];
+        if ( empty( $meta->relations ) ) {
+            return;
+        }
+
+        foreach ( $meta->relations as $propertyName => $relation ) {
+            $prop = $meta->fields[ $propertyName ];
+            $value = $prop->getValue( $entity );
+
+            if ( $relation[ 'type' ] === 'oneToMany' && is_array( $value ) ) {
+                foreach ( $value as $relatedEntity ) {
+                    if ( is_object( $relatedEntity ) ) {
+                        $this->persist( $relatedEntity );
                     }
                 }
-            } elseif ($relation['type'] === 'manyToOne' && is_object($value)) {
-                $this->persist($value);
+            } elseif ( $relation[ 'type' ] === 'manyToOne' && is_object( $value ) ) {
+                $this->persist( $value );
             }
         }
     }
 
-    private function doInsert(object $entity, array $metadatas): void {
-        $meta = $metadatas[get_class($entity)];
+    private function doInsert( object $entity, array $classesMetadata ): void
+    {
+        $meta = $classesMetadata[ get_class( $entity ) ];
         $cols = [];
         $vals = [];
         $params = [];
-        foreach ($meta->fields as $propName => $prop) {
+        foreach ( $meta->fields as $propName => $prop ) {
             // Skip ID field if it's generated
-            if ($propName === $meta->idField && $meta->idGenerated) continue;
-            
+            if ( $propName === $meta->idField && $meta->idGenerated ) {
+                continue;
+            }
+
             // Skip relation fields
-            if (isset($meta->relations[$propName])) continue;
-            
-            $val = $prop->getValue($entity);
-            
+            if ( isset( $meta->relations[ $propName ] ) ) {
+                continue;
+            }
+
+            $val = $prop->getValue( $entity );
+
             // Handle foreign keys for ManyToOne relations
-            if (preg_match('/(.+)_id$/', $propName, $matches) && isset($meta->relations[$matches[1]])) {
-                $relationProp = $meta->fields[$matches[1]];
-                $relatedEntity = $relationProp->getValue($entity);
-                if ($relatedEntity) {
-                    $relatedMeta = $metadatas[get_class($relatedEntity)];
-                    $relatedIdProp = $relatedMeta->fields[$relatedMeta->idField];
-                    $val = $relatedIdProp->getValue($relatedEntity);
+            if ( preg_match( '/(.+)_id$/', $propName, $matches ) && isset( $meta->relations[ $matches[ 1 ] ] ) ) {
+                $relationProp = $meta->fields[ $matches[ 1 ] ];
+                $relatedEntity = $relationProp->getValue( $entity );
+                if ( $relatedEntity ) {
+                    $relatedMeta = $classesMetadata[ get_class( $relatedEntity ) ];
+                    $relatedIdProp = $relatedMeta->fields[ $relatedMeta->idField ];
+                    $val = $relatedIdProp->getValue( $relatedEntity );
                 }
             }
-            
-            $cols[] = $this->escapeIdentifier($meta->columnNames[$propName]);
+
+            $cols[] = $this->escapeIdentifier( $meta->columnNames[ $propName ] );
             $vals[] = '?';
             $params[] = $val;
         }
-        $sql = sprintf('INSERT INTO %s (%s) VALUES (%s)', $this->escapeIdentifier($meta->table), implode(',', $cols), implode(',', $vals));
-        $stmt = $this->conn->prepare($sql);
-        $stmt->execute($params);
-        if ($meta->idField && $meta->idGenerated) {
+        $sql = sprintf(
+            'INSERT INTO %s (%s) VALUES (%s)',
+            $this->escapeIdentifier( $meta->table ),
+            implode( ',', $cols ),
+            implode( ',', $vals )
+        );
+        $stmt = $this->conn->prepare( $sql );
+        $stmt->execute( $params );
+        if ( $meta->idField && $meta->idGenerated ) {
             $id = $this->conn->lastInsertId();
-            $meta->fields[$meta->idField]->setValue($entity, is_numeric($id) ? (int)$id : $id);
+            $meta->fields[ $meta->idField ]->setValue( $entity, is_numeric( $id ) ? (int) $id : $id );
         }
     }
 
-    private function doUpdateIfNeeded(object $entity, array $originalSnapshot, array $currentSnapshot, array $metadatas): void {
-        $meta = $metadatas[get_class($entity)];
-        if (!$meta->idField) return;
-        $idProp = $meta->fields[$meta->idField];
-        $id = $idProp->getValue($entity);
-        if ($id === null) return;
+    private function doUpdateIfNeeded(
+        object $entity,
+        array  $originalSnapshot,
+        array  $currentSnapshot,
+        array $classesMetadata
+    ): void {
+        $meta = $classesMetadata[ get_class( $entity ) ];
+        if ( ! $meta->idField ) {
+            return;
+        }
+        $idProp = $meta->fields[ $meta->idField ];
+        $id = $idProp->getValue( $entity );
+        if ( $id === null ) {
+            return;
+        }
 
         $changes = [];
         $params = [];
-        foreach ($meta->fields as $propName => $prop) {
-            if ($propName === $meta->idField) continue;
-            
+        foreach ( $meta->fields as $propName => $prop ) {
+            if ( $propName === $meta->idField ) {
+                continue;
+            }
+
             // Skip relation properties
-            if (isset($meta->relations[$propName])) continue;
-            
-            $cur = $currentSnapshot[$propName] ?? null;
-            $old = $originalSnapshot[$propName] ?? null;
-            if ($cur !== $old) {
-                $changes[] = $this->escapeIdentifier($meta->columnNames[$propName]) . ' = ?';
+            if ( isset( $meta->relations[ $propName ] ) ) {
+                continue;
+            }
+
+            $cur = $currentSnapshot[ $propName ] ?? null;
+            $old = $originalSnapshot[ $propName ] ?? null;
+            if ( $cur !== $old ) {
+                $changes[] = $this->escapeIdentifier( $meta->columnNames[ $propName ] ) . ' = ?';
                 $params[] = $cur;
             }
         }
-        if (empty($changes)) return;
+        if ( empty( $changes ) ) {
+            return;
+        }
         $params[] = $id;
-        $sql = sprintf('UPDATE %s SET %s WHERE %s = ?', 
-            $this->escapeIdentifier($meta->table), 
-            implode(',', $changes), 
-            $this->escapeIdentifier($meta->columnNames[$meta->idField])
+        $sql = sprintf(
+            'UPDATE %s SET %s WHERE %s = ?',
+            $this->escapeIdentifier( $meta->table ),
+            implode( ',', $changes ),
+            $this->escapeIdentifier( $meta->columnNames[ $meta->idField ] )
         );
-        $stmt = $this->conn->prepare($sql);
-        $stmt->execute($params);
+        $stmt = $this->conn->prepare( $sql );
+        $stmt->execute( $params );
     }
 
-    private function doDelete(object $entity, array $metadatas): void {
-        $meta = $metadatas[get_class($entity)];
-        if (!$meta->idField) return;
-        $idProp = $meta->fields[$meta->idField];
-        $id = $idProp->getValue($entity);
-        if ($id === null) return;
-        
+    private function doDelete( object $entity, array $classesMetadata ): void
+    {
+        $meta = $classesMetadata[ get_class( $entity ) ];
+        if ( ! $meta->idField ) {
+            return;
+        }
+        $idProp = $meta->fields[ $meta->idField ];
+        $id = $idProp->getValue( $entity );
+        if ( $id === null ) {
+            return;
+        }
+
         // Handle cascade delete for relations
-        if (!empty($meta->relations)) {
-            foreach ($meta->relations as $propertyName => $relation) {
-                if (!$relation['cascade']) continue;
-                
-                $prop = $meta->fields[$propertyName];
-                $value = $prop->getValue($entity);
-                
-                if ($relation['type'] === 'oneToMany' && is_array($value)) {
-                    foreach ($value as $relatedEntity) {
-                        if (is_object($relatedEntity)) {
-                            $this->remove($relatedEntity);
-                            $this->doDelete($relatedEntity, $metadatas);
+        if ( ! empty( $meta->relations ) ) {
+            foreach ( $meta->relations as $propertyName => $relation ) {
+                if ( ! $relation[ 'cascade' ] ) {
+                    continue;
+                }
+
+                $prop = $meta->fields[ $propertyName ];
+                $value = $prop->getValue( $entity );
+
+                if ( $relation[ 'type' ] === 'oneToMany' && is_array( $value ) ) {
+                    foreach ( $value as $relatedEntity ) {
+                        if ( is_object( $relatedEntity ) ) {
+                            $this->remove( $relatedEntity );
+                            $this->doDelete( $relatedEntity, $classesMetadata );
                         }
                     }
-                } elseif ($relation['type'] === 'manyToOne' && is_object($value)) {
-                    $this->remove($value);
-                    $this->doDelete($value, $metadatas);
+                } elseif ( $relation[ 'type' ] === 'manyToOne' && is_object( $value ) ) {
+                    $this->remove( $value );
+                    $this->doDelete( $value, $classesMetadata );
                 }
             }
         }
-        
-        $sql = sprintf('DELETE FROM %s WHERE %s = ?', 
-            $this->escapeIdentifier($meta->table), 
-            $this->escapeIdentifier($meta->columnNames[$meta->idField])
-        );
-        $stmt = $this->conn->prepare($sql);
-        $stmt->execute([$id]);
-    }
 
-    // helper: find object by spl_object_hash in managed or new
-    private function getObjectByOid(string $oid): ?object {
-        if (isset($this->managedObjects[$oid])) {
-            return $this->managedObjects[$oid];
-        }
-        
-        if (isset($this->new[$oid])) {
-            return $this->new[$oid];
-        }
-        
-        return null;
+        $sql = sprintf(
+            'DELETE FROM %s WHERE %s = ?',
+            $this->escapeIdentifier( $meta->table ),
+            $this->escapeIdentifier( $meta->columnNames[ $meta->idField ] )
+        );
+        $stmt = $this->conn->prepare( $sql );
+        $stmt->execute( [$id] );
     }
 }

@@ -2,7 +2,7 @@
 
 namespace Fduarte42\Aurum;
 
-use Fduarte42\Aurum\Connection\PdoConnection;
+use Fduarte42\Aurum\Connection\ConnectionInterface;
 use Fduarte42\Aurum\Metadata\ClassMetadata;
 use Fduarte42\Aurum\Repository\Repository;
 use Fduarte42\Aurum\UnitOfWork\UnitOfWork;
@@ -13,7 +13,7 @@ use RuntimeException;
 use Throwable;
 
 final class EntityManager {
-    private PdoConnection $conn;
+    private ConnectionInterface $conn;
 
     /** @var array<string, UnitOfWork> */
     private array $uows = [];
@@ -21,7 +21,7 @@ final class EntityManager {
     /** @var array<string, ClassMetadata> */
     private array $metadataCache = [];
 
-    public function __construct(PdoConnection $conn) {
+    public function __construct( ConnectionInterface $conn) {
         $this->conn = $conn;
         $this->uows['default'] = new UnitOfWork($conn, 'default');
     }
@@ -112,7 +112,7 @@ final class EntityManager {
         return new Repository($this, $class);
     }
 
-    public function getConnection(): PdoConnection
+    public function getConnection(): ConnectionInterface
     {
         return $this->conn;
     }
