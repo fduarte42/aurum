@@ -77,7 +77,7 @@ class MigrationRepository implements MigrationRepositoryInterface
     {
         $this->ensureMigrationTableExists();
 
-        $sql = "SELECT version FROM " . self::TABLE_NAME . " ORDER BY executed_at ASC";
+        $sql = "SELECT version FROM " . self::TABLE_NAME . " ORDER BY id ASC";
         $results = $this->connection->fetchAll($sql);
 
         return array_column($results, 'version');
@@ -90,7 +90,7 @@ class MigrationRepository implements MigrationRepositoryInterface
     {
         $this->ensureMigrationTableExists();
 
-        $sql = "SELECT version, description, executed_at, execution_time FROM " . self::TABLE_NAME . " ORDER BY executed_at ASC";
+        $sql = "SELECT version, description, executed_at, execution_time FROM " . self::TABLE_NAME . " ORDER BY id ASC";
         return $this->connection->fetchAll($sql);
     }
 
@@ -101,7 +101,7 @@ class MigrationRepository implements MigrationRepositoryInterface
     {
         $this->ensureMigrationTableExists();
 
-        $sql = "SELECT version FROM " . self::TABLE_NAME . " ORDER BY executed_at DESC LIMIT 1";
+        $sql = "SELECT version FROM " . self::TABLE_NAME . " ORDER BY id DESC LIMIT 1";
         $result = $this->connection->fetchOne($sql);
 
         return $result ? $result['version'] : null;
@@ -146,7 +146,8 @@ class MigrationRepository implements MigrationRepositoryInterface
         if ($platform === 'sqlite') {
             $sql = "
                 CREATE TABLE " . self::TABLE_NAME . " (
-                    version TEXT PRIMARY KEY,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    version TEXT UNIQUE NOT NULL,
                     description TEXT NOT NULL DEFAULT '',
                     executed_at TEXT NOT NULL,
                     execution_time REAL NOT NULL DEFAULT 0.0
@@ -156,7 +157,8 @@ class MigrationRepository implements MigrationRepositoryInterface
             // MariaDB/MySQL
             $sql = "
                 CREATE TABLE " . self::TABLE_NAME . " (
-                    version VARCHAR(255) PRIMARY KEY,
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    version VARCHAR(255) UNIQUE NOT NULL,
                     description TEXT NOT NULL DEFAULT '',
                     executed_at DATETIME NOT NULL,
                     execution_time DECIMAL(10,3) NOT NULL DEFAULT 0.000

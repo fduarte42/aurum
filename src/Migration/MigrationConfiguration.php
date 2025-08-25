@@ -148,7 +148,10 @@ class MigrationConfiguration
     public function validate(): void
     {
         if (!is_dir($this->migrationsDirectory)) {
-            throw MigrationException::migrationDirectoryNotFound($this->migrationsDirectory);
+            // Try to create the directory
+            if (!mkdir($this->migrationsDirectory, 0755, true)) {
+                throw MigrationException::migrationDirectoryNotFound($this->migrationsDirectory);
+            }
         }
 
         if (!is_writable($this->migrationsDirectory)) {

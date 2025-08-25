@@ -1,0 +1,6 @@
+/.phpunit.cache/
+/build/
+/coverage-html/
+/composer.lock
+/.idea
+/vendor

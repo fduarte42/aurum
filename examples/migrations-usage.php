@@ -87,11 +87,11 @@ class Post
 echo "🚀 Aurum Migration System Demo\n";
 echo "==============================\n\n";
 
-// Setup with migrations support
+// Setup with migrations support - using in-memory database
 $config = [
     'connection' => [
         'driver' => 'sqlite',
-        'path' => __DIR__ . '/demo.db'
+        'path' => ':memory:'  // In-memory database - no files created!
     ],
     'migrations' => [
         'directory' => __DIR__ . '/migrations',
@@ -121,7 +121,10 @@ if ($status['total_migrations'] === 0) {
     // Generate migration for users table
     $version1 = $migrationService->generate('Create users table');
     echo "Generated migration: {$version1}\n";
-    
+
+    // Add small delay to ensure different timestamps
+    sleep(1);
+
     // Generate migration for posts table
     $version2 = $migrationService->generate('Create posts table');
     echo "Generated migration: {$version2}\n";
@@ -151,9 +154,16 @@ $post = new Post('Hello World', 'This is my first post!');
 $post->setAuthor($user);
 $post->setPublished(true);
 
-$entityManager->persist($user);
-$entityManager->persist($post);
-$entityManager->flush();
+$entityManager->beginTransaction();
+try {
+    $entityManager->persist($user);
+    $entityManager->persist($post);
+    $entityManager->flush();
+    $entityManager->commit();
+} catch (\Exception $e) {
+    $entityManager->rollback();
+    throw $e;
+}
 
 echo "Created user: {$user->getName()} ({$user->getEmail()})\n";
 echo "Created post: {$post->getTitle()}\n";

@@ -92,7 +92,9 @@ class MigrationIntegrationTest extends TestCase
             new \Fduarte42\Aurum\Proxy\LazyGhostProxyFactory()
         );
 
-        $migrationManager = $entityManager->getMigrationManager();
+        // Use the same migration manager that was set up in setUp
+        // This ensures it uses the same temporary directory
+        $migrationManager = $this->migrationManager;
 
         // Generate and run a migration with unique version
         $version = $this->generateUniqueVersion();
@@ -178,8 +180,8 @@ class MigrationIntegrationTest extends TestCase
 
     public function testReset(): void
     {
-        $version = $this->migrationManager->generate('Create reset table');
-        $this->modifyMigrationFile($version, 'reset_table');
+        $version = $this->generateUniqueVersion();
+        $this->createMigrationFile($version, 'Create reset table', 'reset_table');
 
         $this->migrationManager->migrate();
 
@@ -199,9 +201,73 @@ class MigrationIntegrationTest extends TestCase
         $this->assertTrue($this->tableExists('reset_table'));
     }
 
+    private function generateUniqueVersion(): string
+    {
+        static $counter = 0;
+        $counter++;
+        return '2025082520' . str_pad((string)$counter, 4, '0', STR_PAD_LEFT);
+    }
+
+    private function createMigrationFile(string $version, string $description, string $tableName): void
+    {
+        $this->createMigrationFileWithDependencies($version, $description, $tableName, []);
+    }
+
     private function modifyMigrationFile(string $version, string $tableName): void
     {
         $this->modifyMigrationFileWithDependencies($version, $tableName, []);
+    }
+
+    private function createMigrationFileWithDependencies(string $version, string $description, string $tableName, array $dependencies): void
+    {
+        // Make class name unique to avoid redeclaration errors
+        $uniqueId = substr(md5($this->tempDir . $version), 0, 8);
+        $className = 'Version' . $version . '_' . $uniqueId;
+
+        $dependenciesCode = empty($dependencies)
+            ? 'return [];'
+            : 'return [' . implode(', ', array_map(fn($dep) => "'$dep'", $dependencies)) . '];';
+
+        $content = '<?php
+namespace TestMigrations;
+
+use Fduarte42\Aurum\Migration\AbstractMigration;
+use Fduarte42\Aurum\Connection\ConnectionInterface;
+
+final class ' . $className . ' extends AbstractMigration
+{
+    public function getVersion(): string
+    {
+        return \'' . $version . '\';
+    }
+
+    public function getDescription(): string
+    {
+        return \'' . $description . '\';
+    }
+
+    public function getDependencies(): array
+    {
+        ' . $dependenciesCode . '
+    }
+
+    public function up(ConnectionInterface $connection): void
+    {
+        $this->schemaBuilder->createTable(\'' . $tableName . '\')
+            ->id()
+            ->string(\'name\')
+            ->timestamps()
+            ->create();
+    }
+
+    public function down(ConnectionInterface $connection): void
+    {
+        $this->schemaBuilder->dropTable(\'' . $tableName . '\');
+    }
+}
+';
+
+        file_put_contents($this->migrationManager->getConfiguration()->getMigrationFilePath($version), $content);
     }
 
     private function modifyMigrationFileWithDependencies(string $version, string $tableName, array $dependencies): void
