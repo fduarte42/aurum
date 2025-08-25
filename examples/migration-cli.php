@@ -18,11 +18,11 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use Fduarte42\Aurum\DependencyInjection\ContainerBuilder;
 use Fduarte42\Aurum\Migration\MigrationService;
 
-// Configuration
+// Configuration - using in-memory database
 $config = [
     'connection' => [
         'driver' => 'sqlite',
-        'path' => __DIR__ . '/app.db'
+        'path' => ':memory:'  // In-memory database - no files created!
     ],
     'migrations' => [
         'directory' => __DIR__ . '/migrations',
