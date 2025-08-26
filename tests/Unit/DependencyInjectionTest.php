@@ -223,7 +223,7 @@ class DependencyInjectionTest extends TestCase
         $config = [
             'connection' => [
                 'driver' => 'sqlite',
-                'path' => '/tmp/test.db'
+                'path' => ':memory:'
             ],
             'metadata' => [
                 'cache' => true
