@@ -231,7 +231,7 @@ Future enhancements being considered:
 
 ## 📄 License
 
-Aurum ORM is open-source software. Please see the LICENSE file for details.
+Aurum ORM is open-source software licensed under the [MIT License](../LICENSE). You are free to use, modify, and distribute this software in accordance with the terms of the MIT License.
 
 ---
 

@@ -672,4 +672,4 @@ See `examples/migrations-usage.php` and `examples/sample-migrations/` for comple
 
 ## License
 
-MIT License. See LICENSE file for details.
+Aurum ORM is open-source software licensed under the [MIT License](LICENSE). You are free to use, modify, and distribute this software in accordance with the terms of the MIT License.

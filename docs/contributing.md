@@ -507,4 +507,8 @@ Aurum follows semantic versioning:
 - [ ] Version bumped
 - [ ] Git tag created
 
+## 📄 License
+
+By contributing to Aurum ORM, you agree that your contributions will be licensed under the [MIT License](../LICENSE), the same license that covers the project.
+
 Thank you for contributing to Aurum ORM! Your contributions help make this project better for everyone.
