@@ -4,60 +4,45 @@ declare(strict_types=1);
 
 namespace Fduarte42\Aurum\Connection;
 
+use Fduarte42\Aurum\Driver\DatabaseDriverInterface;
 use Fduarte42\Aurum\Exception\ORMException;
 use PDO;
-use PDOException;
 use PDOStatement;
 
 /**
- * Database connection implementation supporting SQLite and MariaDB
+ * Database connection implementation using the driver pattern
+ *
+ * This class provides a backward-compatible interface while delegating
+ * database-specific operations to the appropriate driver implementation.
  */
 class Connection implements ConnectionInterface
 {
-    private PDO $pdo;
-    private string $platform;
+    private DatabaseDriverInterface $driver;
     private array $savepointStack = [];
-    private int $savepointCounter = 0;
 
-    public function __construct(PDO $pdo, string $platform)
+    public function __construct(DatabaseDriverInterface $driver)
     {
-        $this->pdo = $pdo;
-        $this->platform = strtolower($platform);
-        
-        // Set error mode to exceptions
-        $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        
-        // Set fetch mode to associative arrays
-        $this->pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+        $this->driver = $driver;
     }
 
     public function getPdo(): PDO
     {
-        return $this->pdo;
+        return $this->driver->getPdo();
     }
 
     public function execute(string $sql, array $parameters = []): PDOStatement
     {
-        try {
-            $stmt = $this->pdo->prepare($sql);
-            $stmt->execute($parameters);
-            return $stmt;
-        } catch (PDOException $e) {
-            throw ORMException::queryFailed($sql, $e->getMessage());
-        }
+        return $this->driver->execute($sql, $parameters);
     }
 
     public function fetchOne(string $sql, array $parameters = []): ?array
     {
-        $stmt = $this->execute($sql, $parameters);
-        $result = $stmt->fetch();
-        return $result === false ? null : $result;
+        return $this->driver->fetchOne($sql, $parameters);
     }
 
     public function fetchAll(string $sql, array $parameters = []): array
     {
-        $stmt = $this->execute($sql, $parameters);
-        return $stmt->fetchAll();
+        return $this->driver->fetchAll($sql, $parameters);
     }
 
     public function beginTransaction(): void
@@ -65,12 +50,8 @@ class Connection implements ConnectionInterface
         if ($this->inTransaction()) {
             throw ORMException::transactionAlreadyActive();
         }
-        
-        try {
-            $this->pdo->beginTransaction();
-        } catch (PDOException $e) {
-            throw ORMException::connectionFailed($e->getMessage());
-        }
+
+        $this->driver->beginTransaction();
     }
 
     public function commit(): void
@@ -78,14 +59,9 @@ class Connection implements ConnectionInterface
         if (!$this->inTransaction()) {
             throw ORMException::transactionNotActive();
         }
-        
-        try {
-            $this->pdo->commit();
-            $this->savepointStack = [];
-            $this->savepointCounter = 0;
-        } catch (PDOException $e) {
-            throw ORMException::connectionFailed($e->getMessage());
-        }
+
+        $this->driver->commit();
+        $this->savepointStack = [];
     }
 
     public function rollback(): void
@@ -93,19 +69,14 @@ class Connection implements ConnectionInterface
         if (!$this->inTransaction()) {
             throw ORMException::transactionNotActive();
         }
-        
-        try {
-            $this->pdo->rollBack();
-            $this->savepointStack = [];
-            $this->savepointCounter = 0;
-        } catch (PDOException $e) {
-            throw ORMException::connectionFailed($e->getMessage());
-        }
+
+        $this->driver->rollback();
+        $this->savepointStack = [];
     }
 
     public function inTransaction(): bool
     {
-        return $this->pdo->inTransaction();
+        return $this->driver->inTransaction();
     }
 
     public function createSavepoint(string $name): void
@@ -114,7 +85,7 @@ class Connection implements ConnectionInterface
             throw ORMException::transactionNotActive();
         }
 
-        if (!$this->supportsSavepoints()) {
+        if (!$this->driver->supportsSavepoints()) {
             throw ORMException::savepointNotSupported();
         }
 
@@ -122,8 +93,7 @@ class Connection implements ConnectionInterface
             throw ORMException::invalidSavepointName($name);
         }
 
-        $sql = $this->getSavepointSQL('CREATE', $name);
-        $this->execute($sql);
+        $this->driver->createSavepoint($name);
         $this->savepointStack[] = $name;
     }
 
@@ -133,7 +103,7 @@ class Connection implements ConnectionInterface
             throw ORMException::transactionNotActive();
         }
 
-        if (!$this->supportsSavepoints()) {
+        if (!$this->driver->supportsSavepoints()) {
             throw ORMException::savepointNotSupported();
         }
 
@@ -142,9 +112,8 @@ class Connection implements ConnectionInterface
             throw ORMException::invalidSavepointName($name);
         }
 
-        $sql = $this->getSavepointSQL('RELEASE', $name);
-        $this->execute($sql);
-        
+        $this->driver->releaseSavepoint($name);
+
         // Remove this savepoint and all nested ones
         $this->savepointStack = array_slice($this->savepointStack, 0, $index);
     }
@@ -155,7 +124,7 @@ class Connection implements ConnectionInterface
             throw ORMException::transactionNotActive();
         }
 
-        if (!$this->supportsSavepoints()) {
+        if (!$this->driver->supportsSavepoints()) {
             throw ORMException::savepointNotSupported();
         }
 
@@ -164,64 +133,42 @@ class Connection implements ConnectionInterface
             throw ORMException::invalidSavepointName($name);
         }
 
-        $sql = $this->getSavepointSQL('ROLLBACK', $name);
-        $this->execute($sql);
-        
+        $this->driver->rollbackToSavepoint($name);
+
         // Remove all savepoints after this one
         $this->savepointStack = array_slice($this->savepointStack, 0, $index + 1);
     }
 
     public function lastInsertId(): string
     {
-        return $this->pdo->lastInsertId();
+        return $this->driver->lastInsertId();
     }
 
     public function getPlatform(): string
     {
-        return $this->platform;
+        return $this->driver->getPlatform();
     }
 
     public function quote(mixed $value): string
     {
-        if ($value === null) {
-            return 'NULL';
-        }
-        
-        return $this->pdo->quote((string) $value);
+        return $this->driver->quote($value);
     }
 
     public function quoteIdentifier(string $identifier): string
     {
-        return match ($this->platform) {
-            'sqlite' => '"' . str_replace('"', '""', $identifier) . '"',
-            'mysql', 'mariadb' => '`' . str_replace('`', '``', $identifier) . '`',
-            default => '"' . str_replace('"', '""', $identifier) . '"',
-        };
-    }
-
-    private function supportsSavepoints(): bool
-    {
-        return in_array($this->platform, ['sqlite', 'mysql', 'mariadb'], true);
-    }
-
-    private function getSavepointSQL(string $operation, string $name): string
-    {
-        $quotedName = $this->quoteIdentifier($name);
-        
-        return match ($operation) {
-            'CREATE' => "SAVEPOINT {$quotedName}",
-            'RELEASE' => match ($this->platform) {
-                'sqlite' => "RELEASE SAVEPOINT {$quotedName}",
-                'mysql', 'mariadb' => "RELEASE SAVEPOINT {$quotedName}",
-                default => "RELEASE SAVEPOINT {$quotedName}",
-            },
-            'ROLLBACK' => "ROLLBACK TO SAVEPOINT {$quotedName}",
-            default => throw new \InvalidArgumentException("Unknown savepoint operation: {$operation}"),
-        };
+        return $this->driver->quoteIdentifier($identifier);
     }
 
     public function generateSavepointName(): string
     {
-        return 'sp_' . (++$this->savepointCounter);
+        return $this->driver->generateSavepointName();
+    }
+
+    /**
+     * Get the underlying database driver
+     */
+    public function getDriver(): DatabaseDriverInterface
+    {
+        return $this->driver;
     }
 }

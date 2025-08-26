@@ -121,22 +121,7 @@ class SqliteTableBuilder extends AbstractTableBuilder
         return $definition;
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    protected function getSqlType(string $type, array $options): string
-    {
-        return match ($type) {
-            'integer' => 'INTEGER',
-            'string' => 'TEXT',
-            'text' => 'TEXT',
-            'boolean' => 'INTEGER',
-            'decimal' => 'REAL',
-            'datetime' => 'TEXT',
-            'uuid' => 'TEXT',
-            default => 'TEXT'
-        };
-    }
+
 
     /**
      * Build foreign key constraint definition

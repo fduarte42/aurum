@@ -63,4 +63,14 @@ class ORMException extends \Exception
     {
         return new self(sprintf('Unknown type "%s".', $typeName));
     }
+
+    public static function configurationError(string $message): self
+    {
+        return new self(sprintf('Configuration error: %s', $message));
+    }
+
+    public static function transactionFailed(string $operation, string $message): self
+    {
+        return new self(sprintf('Transaction %s failed: %s', $operation, $message));
+    }
 }

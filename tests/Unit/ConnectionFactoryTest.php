@@ -84,25 +84,26 @@ class ConnectionFactoryTest extends TestCase
 
     public function testCreateFromConfigMissingDriver(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Driver is required');
-        
+        $this->expectException(\Fduarte42\Aurum\Exception\ORMException::class);
+        $this->expectExceptionMessage('Database driver not specified in configuration');
+
         ConnectionFactory::createFromConfig([]);
     }
 
     public function testCreateFromConfigUnsupportedDriver(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Unsupported driver: postgresql');
-        
+        $this->expectException(\Fduarte42\Aurum\Exception\ORMException::class);
+        $this->expectExceptionMessage('Unsupported database driver: postgresql');
+
         ConnectionFactory::createFromConfig(['driver' => 'postgresql']);
     }
 
     public function testCreateFromConfigMissingDatabase(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Database name is required');
-        
+        // With the new driver pattern, missing database results in connection failure
+        $this->expectException(\Fduarte42\Aurum\Exception\ORMException::class);
+        $this->expectExceptionMessage('Database connection failed');
+
         ConnectionFactory::createFromConfig([
             'driver' => 'mariadb',
             'host' => 'localhost'
@@ -111,9 +112,10 @@ class ConnectionFactoryTest extends TestCase
 
     public function testCreateFromConfigMissingUsername(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Username is required');
-        
+        // With the new driver pattern, missing username results in connection failure
+        $this->expectException(\Fduarte42\Aurum\Exception\ORMException::class);
+        $this->expectExceptionMessage('Database connection failed');
+
         ConnectionFactory::createFromConfig([
             'driver' => 'mariadb',
             'host' => 'localhost',

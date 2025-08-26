@@ -60,15 +60,19 @@ abstract class AbstractMigration implements MigrationInterface
      */
     protected function tableExists(string $tableName): bool
     {
-        $platform = $this->connection->getPlatform();
-        
-        if ($platform === 'sqlite') {
-            $sql = "SELECT name FROM sqlite_master WHERE type='table' AND name = ?";
+        // Use driver's table exists SQL if available
+        if ($this->connection instanceof \Fduarte42\Aurum\Connection\Connection) {
+            $sql = $this->connection->getDriver()->getTableExistsSQL();
         } else {
-            // MariaDB/MySQL
-            $sql = "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?";
+            // Fallback for backward compatibility
+            $platform = $this->connection->getPlatform();
+            if ($platform === 'sqlite') {
+                $sql = "SELECT name FROM sqlite_master WHERE type='table' AND name = ?";
+            } else {
+                $sql = "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?";
+            }
         }
-        
+
         $result = $this->connection->fetchOne($sql, [$tableName]);
         return $result !== null;
     }
@@ -102,15 +106,19 @@ abstract class AbstractMigration implements MigrationInterface
      */
     protected function indexExists(string $tableName, string $indexName): bool
     {
-        $platform = $this->connection->getPlatform();
-        
-        if ($platform === 'sqlite') {
-            $sql = "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name = ? AND name = ?";
+        // Use driver's index exists SQL if available
+        if ($this->connection instanceof \Fduarte42\Aurum\Connection\Connection) {
+            $sql = $this->connection->getDriver()->getIndexExistsSQL();
         } else {
-            // MariaDB/MySQL
-            $sql = "SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?";
+            // Fallback for backward compatibility
+            $platform = $this->connection->getPlatform();
+            if ($platform === 'sqlite') {
+                $sql = "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name = ? AND name = ?";
+            } else {
+                $sql = "SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?";
+            }
         }
-        
+
         $result = $this->connection->fetchOne($sql, [$tableName, $indexName]);
         return $result !== null;
     }

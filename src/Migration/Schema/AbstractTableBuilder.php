@@ -258,9 +258,49 @@ abstract class AbstractTableBuilder implements TableBuilderInterface
     abstract protected function buildColumnDefinition(string $name, array $column): string;
 
     /**
-     * Get the SQL type for a column type
+     * Get the SQL type for a column type using the database driver
      */
-    abstract protected function getSqlType(string $type, array $options): string;
+    protected function getSqlType(string $type, array $options): string
+    {
+        // Map ORM types to generic SQL types
+        $genericType = match ($type) {
+            'integer' => 'INTEGER',
+            'string' => 'VARCHAR',
+            'text' => 'TEXT',
+            'boolean' => 'BOOLEAN',
+            'decimal' => 'DECIMAL',
+            'datetime' => 'DATETIME',
+            'uuid' => 'UUID',
+            'json' => 'JSON',
+            default => 'TEXT'
+        };
+
+        // Use the driver to get platform-specific SQL type
+        if ($this->connection instanceof \Fduarte42\Aurum\Connection\Connection) {
+            return $this->connection->getDriver()->getSQLType($genericType, $options);
+        }
+
+        // Fallback for backward compatibility
+        return $this->getLegacySqlType($type, $options);
+    }
+
+    /**
+     * Legacy SQL type mapping for backward compatibility
+     */
+    protected function getLegacySqlType(string $type, array $options): string
+    {
+        return match ($type) {
+            'integer' => 'INTEGER',
+            'string' => 'VARCHAR(' . ($options['length'] ?? 255) . ')',
+            'text' => 'TEXT',
+            'boolean' => 'BOOLEAN',
+            'decimal' => 'DECIMAL(' . ($options['precision'] ?? 10) . ',' . ($options['scale'] ?? 2) . ')',
+            'datetime' => 'DATETIME',
+            'uuid' => 'CHAR(36)',
+            'json' => 'TEXT',
+            default => 'TEXT'
+        };
+    }
 
     /**
      * Build CREATE TABLE SQL

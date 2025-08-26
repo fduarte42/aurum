@@ -159,22 +159,7 @@ class MariaDbTableBuilder extends AbstractTableBuilder
         return $definition;
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    protected function getSqlType(string $type, array $options): string
-    {
-        return match ($type) {
-            'integer' => 'INT',
-            'string' => 'VARCHAR(' . ($options['length'] ?? 255) . ')',
-            'text' => 'TEXT',
-            'boolean' => 'TINYINT(1)',
-            'decimal' => 'DECIMAL(' . ($options['precision'] ?? 10) . ',' . ($options['scale'] ?? 2) . ')',
-            'datetime' => 'DATETIME',
-            'uuid' => 'CHAR(36)',
-            default => 'TEXT'
-        };
-    }
+
 
     /**
      * Build foreign key constraint definition

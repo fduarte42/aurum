@@ -110,8 +110,8 @@ class MigrationDiffCommandTest extends TestCase
     {
         // Test that the command handles exceptions gracefully
         // The constructor will throw an exception due to invalid driver
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Unsupported driver: invalid_driver');
+        $this->expectException(\Fduarte42\Aurum\Exception\ORMException::class);
+        $this->expectExceptionMessage('Unsupported database driver: invalid_driver');
 
         new MigrationDiffCommand([
             'connection' => [

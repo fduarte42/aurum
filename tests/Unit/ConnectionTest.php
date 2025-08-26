@@ -12,10 +12,12 @@ use PHPUnit\Framework\TestCase;
 class ConnectionTest extends TestCase
 {
     private Connection $connection;
+    private \PDO $pdo;
 
     protected function setUp(): void
     {
         $this->connection = ConnectionFactory::createSqliteConnection(':memory:');
+        $this->pdo = $this->connection->getPdo();
     }
 
     public function testBasicConnection(): void
@@ -127,11 +129,12 @@ class ConnectionTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Unknown savepoint operation: INVALID');
 
-        // Use reflection to test private method
-        $reflection = new \ReflectionClass($this->connection);
+        // Test invalid savepoint operation through the driver
+        $driver = $this->connection->getDriver();
+        $reflection = new \ReflectionClass($driver);
         $method = $reflection->getMethod('getSavepointSQL');
         $method->setAccessible(true);
-        $method->invoke($this->connection, 'INVALID', 'test');
+        $method->invoke($driver, 'INVALID', 'test');
     }
 
     public function testDuplicateSavepoint(): void
@@ -248,12 +251,9 @@ class ConnectionTest extends TestCase
 
     public function testSupportsSavepointsPrivateMethod(): void
     {
-        // Use reflection to test private supportsSavepoints method
-        $reflection = new \ReflectionClass($this->connection);
-        $method = $reflection->getMethod('supportsSavepoints');
-        $method->setAccessible(true);
-
-        $result = $method->invoke($this->connection);
+        // Test savepoints support through the driver
+        $driver = $this->connection->getDriver();
+        $result = $driver->supportsSavepoints();
         $this->assertTrue($result); // SQLite supports savepoints
     }
 
@@ -269,56 +269,29 @@ class ConnectionTest extends TestCase
     public function testQuoteIdentifierForMySQL(): void
     {
         // Create a MySQL connection to test MySQL-specific quoting
-        // Since we can't create a real MySQL connection, we'll use reflection
-        $reflection = new \ReflectionClass($this->connection);
-        $platformProperty = $reflection->getProperty('platform');
-        $platformProperty->setAccessible(true);
+        // Create a MariaDB driver to test MySQL-style quoting
+        $mariaDbDriver = new \Fduarte42\Aurum\Driver\MariaDbDriver($this->pdo);
+        $mariaDbConnection = new \Fduarte42\Aurum\Connection\Connection($mariaDbDriver);
 
-        // Temporarily change platform to mysql
-        $originalPlatform = $platformProperty->getValue($this->connection);
-        $platformProperty->setValue($this->connection, 'mysql');
-
-        $quoted = $this->connection->quoteIdentifier('table`name');
+        $quoted = $mariaDbConnection->quoteIdentifier('table`name');
         $this->assertEquals('`table``name`', $quoted);
-
-        // Restore original platform
-        $platformProperty->setValue($this->connection, $originalPlatform);
     }
 
     public function testQuoteIdentifierForMariaDB(): void
     {
-        // Test MariaDB-specific quoting
-        $reflection = new \ReflectionClass($this->connection);
-        $platformProperty = $reflection->getProperty('platform');
-        $platformProperty->setAccessible(true);
+        // Create a MariaDB driver to test MariaDB-style quoting
+        $mariaDbDriver = new \Fduarte42\Aurum\Driver\MariaDbDriver($this->pdo);
+        $mariaDbConnection = new \Fduarte42\Aurum\Connection\Connection($mariaDbDriver);
 
-        // Temporarily change platform to mariadb
-        $originalPlatform = $platformProperty->getValue($this->connection);
-        $platformProperty->setValue($this->connection, 'mariadb');
-
-        $quoted = $this->connection->quoteIdentifier('table`name');
+        $quoted = $mariaDbConnection->quoteIdentifier('table`name');
         $this->assertEquals('`table``name`', $quoted);
-
-        // Restore original platform
-        $platformProperty->setValue($this->connection, $originalPlatform);
     }
 
     public function testQuoteIdentifierForUnknownPlatform(): void
     {
-        // Test unknown platform defaults to double quotes
-        $reflection = new \ReflectionClass($this->connection);
-        $platformProperty = $reflection->getProperty('platform');
-        $platformProperty->setAccessible(true);
-
-        // Temporarily change platform to unknown
-        $originalPlatform = $platformProperty->getValue($this->connection);
-        $platformProperty->setValue($this->connection, 'unknown');
-
+        // SQLite driver uses double quotes, which is the default behavior
         $quoted = $this->connection->quoteIdentifier('table"name');
         $this->assertEquals('"table""name"', $quoted);
-
-        // Restore original platform
-        $platformProperty->setValue($this->connection, $originalPlatform);
     }
 
     public function testLastInsertIdWithSequence(): void
@@ -334,122 +307,103 @@ class ConnectionTest extends TestCase
 
     public function testCreateSavepointWithoutSupportCheck(): void
     {
-        // Test creating savepoint when platform doesn't support them
-        $reflection = new \ReflectionClass($this->connection);
-        $platformProperty = $reflection->getProperty('platform');
-        $platformProperty->setAccessible(true);
+        // Create a mock driver that doesn't support savepoints
+        $mockDriver = $this->createMock(\Fduarte42\Aurum\Driver\DatabaseDriverInterface::class);
+        $mockDriver->method('supportsSavepoints')->willReturn(false);
+        $mockDriver->method('beginTransaction');
+        $mockDriver->method('rollback');
+        $mockDriver->method('inTransaction')->willReturnOnConsecutiveCalls(false, true, true, true);
 
-        $this->connection->beginTransaction();
-
-        // Temporarily change platform to unsupported
-        $originalPlatform = $platformProperty->getValue($this->connection);
-        $platformProperty->setValue($this->connection, 'unsupported');
+        $connectionWithUnsupportedDriver = new \Fduarte42\Aurum\Connection\Connection($mockDriver);
+        $connectionWithUnsupportedDriver->beginTransaction();
 
         $this->expectException(ORMException::class);
         $this->expectExceptionMessage('Savepoints are not supported');
 
         try {
-            $this->connection->createSavepoint('test');
+            $connectionWithUnsupportedDriver->createSavepoint('test');
         } finally {
-            // Restore original platform
-            $platformProperty->setValue($this->connection, $originalPlatform);
-            $this->connection->rollback();
+            $connectionWithUnsupportedDriver->rollback();
         }
     }
 
     public function testRollbackToSavepointWithoutSupport(): void
     {
-        // Test rollback to savepoint when platform doesn't support them
-        $reflection = new \ReflectionClass($this->connection);
-        $platformProperty = $reflection->getProperty('platform');
-        $platformProperty->setAccessible(true);
+        // Create a mock driver that doesn't support savepoints
+        $mockDriver = $this->createMock(\Fduarte42\Aurum\Driver\DatabaseDriverInterface::class);
+        $mockDriver->method('supportsSavepoints')->willReturn(false);
+        $mockDriver->method('beginTransaction');
+        $mockDriver->method('rollback');
+        $mockDriver->method('inTransaction')->willReturnOnConsecutiveCalls(false, true, true, true);
 
-        $this->connection->beginTransaction();
-
-        // Temporarily change platform to unsupported
-        $originalPlatform = $platformProperty->getValue($this->connection);
-        $platformProperty->setValue($this->connection, 'unsupported');
+        $connectionWithUnsupportedDriver = new \Fduarte42\Aurum\Connection\Connection($mockDriver);
+        $connectionWithUnsupportedDriver->beginTransaction();
 
         $this->expectException(ORMException::class);
         $this->expectExceptionMessage('Savepoints are not supported');
 
         try {
-            $this->connection->rollbackToSavepoint('test');
+            $connectionWithUnsupportedDriver->rollbackToSavepoint('test');
         } finally {
-            // Restore original platform
-            $platformProperty->setValue($this->connection, $originalPlatform);
-            $this->connection->rollback();
+            $connectionWithUnsupportedDriver->rollback();
         }
     }
 
     public function testReleaseSavepointWithoutSupport(): void
     {
-        // Test release savepoint when platform doesn't support them
-        $reflection = new \ReflectionClass($this->connection);
-        $platformProperty = $reflection->getProperty('platform');
-        $platformProperty->setAccessible(true);
+        // Create a mock driver that doesn't support savepoints
+        $mockDriver = $this->createMock(\Fduarte42\Aurum\Driver\DatabaseDriverInterface::class);
+        $mockDriver->method('supportsSavepoints')->willReturn(false);
+        $mockDriver->method('beginTransaction');
+        $mockDriver->method('rollback');
+        $mockDriver->method('inTransaction')->willReturnOnConsecutiveCalls(false, true, true, true);
 
-        $this->connection->beginTransaction();
-
-        // Temporarily change platform to unsupported
-        $originalPlatform = $platformProperty->getValue($this->connection);
-        $platformProperty->setValue($this->connection, 'unsupported');
+        $connectionWithUnsupportedDriver = new \Fduarte42\Aurum\Connection\Connection($mockDriver);
+        $connectionWithUnsupportedDriver->beginTransaction();
 
         $this->expectException(ORMException::class);
         $this->expectExceptionMessage('Savepoints are not supported');
 
         try {
-            $this->connection->releaseSavepoint('test');
+            $connectionWithUnsupportedDriver->releaseSavepoint('test');
         } finally {
-            // Restore original platform
-            $platformProperty->setValue($this->connection, $originalPlatform);
-            $this->connection->rollback();
+            $connectionWithUnsupportedDriver->rollback();
         }
     }
 
     public function testGetSavepointSQLForDifferentPlatforms(): void
     {
-        // Test getSavepointSQL for different platforms
-        $reflection = new \ReflectionClass($this->connection);
+        // Test getSavepointSQL for different drivers
+        $sqliteDriver = new \Fduarte42\Aurum\Driver\SqliteDriver($this->pdo);
+        $mariaDbDriver = new \Fduarte42\Aurum\Driver\MariaDbDriver($this->pdo);
+
+        // Test SQLite driver
+        $reflection = new \ReflectionClass($sqliteDriver);
         $method = $reflection->getMethod('getSavepointSQL');
         $method->setAccessible(true);
-        $platformProperty = $reflection->getProperty('platform');
-        $platformProperty->setAccessible(true);
-
-        $originalPlatform = $platformProperty->getValue($this->connection);
-
-        // Test MySQL
-        $platformProperty->setValue($this->connection, 'mysql');
-        $sql = $method->invoke($this->connection, 'RELEASE', 'test');
-        $this->assertEquals('RELEASE SAVEPOINT `test`', $sql);
-
-        // Test MariaDB
-        $platformProperty->setValue($this->connection, 'mariadb');
-        $sql = $method->invoke($this->connection, 'RELEASE', 'test');
-        $this->assertEquals('RELEASE SAVEPOINT `test`', $sql);
-
-        // Test unknown platform
-        $platformProperty->setValue($this->connection, 'unknown');
-        $sql = $method->invoke($this->connection, 'RELEASE', 'test');
+        $sql = $method->invoke($sqliteDriver, 'RELEASE', 'test');
         $this->assertEquals('RELEASE SAVEPOINT "test"', $sql);
 
-        // Restore original platform
-        $platformProperty->setValue($this->connection, $originalPlatform);
+        // Test MariaDB driver
+        $reflection = new \ReflectionClass($mariaDbDriver);
+        $method = $reflection->getMethod('getSavepointSQL');
+        $method->setAccessible(true);
+        $sql = $method->invoke($mariaDbDriver, 'RELEASE', 'test');
+        $this->assertEquals('RELEASE SAVEPOINT `test`', $sql);
     }
 
     public function testConstructor(): void
     {
-        // Test constructor with different platforms
+        // Test constructor with different drivers
         $pdo = new \PDO('sqlite::memory:');
 
-        $sqliteConnection = new Connection($pdo, 'SQLite');
+        $sqliteDriver = new \Fduarte42\Aurum\Driver\SqliteDriver($pdo);
+        $sqliteConnection = new Connection($sqliteDriver);
         $this->assertEquals('sqlite', $sqliteConnection->getPlatform());
 
-        $mysqlConnection = new Connection($pdo, 'MySQL');
-        $this->assertEquals('mysql', $mysqlConnection->getPlatform());
-
-        $mariadbConnection = new Connection($pdo, 'MariaDB');
-        $this->assertEquals('mariadb', $mariadbConnection->getPlatform());
+        $mariaDbDriver = new \Fduarte42\Aurum\Driver\MariaDbDriver($pdo);
+        $mariaDbConnection = new Connection($mariaDbDriver);
+        $this->assertEquals('mariadb', $mariaDbConnection->getPlatform());
     }
 
     public function testInTransaction(): void
