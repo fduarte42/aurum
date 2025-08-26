@@ -354,6 +354,124 @@ $foundUser->removeRole($adminRole);
 $entityManager->flush();
 ```
 
+#### Querying Many-to-Many Relationships
+
+The QueryBuilder provides automatic join resolution for Many-to-Many relationships, making complex queries simple and intuitive.
+
+##### Basic Many-to-Many Queries
+
+**Find Users with Specific Roles:**
+```php
+// Owning side query - automatic junction table joins
+$adminUsers = $entityManager->createQueryBuilder('u')
+    ->select('u', 'r')
+    ->from(User::class, 'u')
+    ->innerJoin('u.roles', 'r')  // Automatic: user_roles junction table
+    ->where('r.name = :role')
+    ->setParameter('role', 'admin')
+    ->getResult();
+```
+
+**Find Roles Assigned to Active Users:**
+```php
+// Inverse side query - automatic junction table joins
+$activeRoles = $entityManager->createQueryBuilder('r')
+    ->select('r', 'u')
+    ->from(Role::class, 'r')
+    ->innerJoin('r.users', 'u')  // Automatic: user_roles junction table
+    ->where('u.active = :active')
+    ->setParameter('active', true)
+    ->getResult();
+```
+
+##### Advanced Many-to-Many Queries
+
+**Multiple Role Filtering:**
+```php
+$users = $entityManager->createQueryBuilder('u')
+    ->select('u')
+    ->from(User::class, 'u')
+    ->innerJoin('u.roles', 'r')
+    ->where('r.name IN (:roles)')
+    ->setParameter('roles', ['admin', 'moderator', 'editor'])
+    ->getResult();
+```
+
+**Complex Multi-Join Queries:**
+```php
+// Find users with admin role who have published posts
+$result = $entityManager->createQueryBuilder('u')
+    ->select('u', 'r', 'p')
+    ->from(User::class, 'u')
+    ->innerJoin('u.roles', 'r')      // Many-to-Many join
+    ->leftJoin('u.posts', 'p')       // OneToMany join
+    ->where('r.name = :role')
+    ->andWhere('p.published = :published')
+    ->setParameter('role', 'admin')
+    ->setParameter('published', true)
+    ->orderBy('u.name', 'ASC')
+    ->getResult();
+```
+
+**Existence Queries:**
+```php
+// Find users who have at least one role
+$usersWithRoles = $entityManager->createQueryBuilder('u')
+    ->select('u')
+    ->from(User::class, 'u')
+    ->where('EXISTS (
+        SELECT 1 FROM user_roles ur
+        WHERE ur.user_id = u.id
+    )')
+    ->getResult();
+
+// Or using automatic joins (simpler)
+$usersWithRoles = $entityManager->createQueryBuilder('u')
+    ->select('u')
+    ->from(User::class, 'u')
+    ->innerJoin('u.roles', 'r')
+    ->getResult();
+```
+
+**Counting Related Entities:**
+```php
+// Count roles per user
+$userRoleCounts = $entityManager->createQueryBuilder('u')
+    ->select('u.name', 'COUNT(r.id) as roleCount')
+    ->from(User::class, 'u')
+    ->leftJoin('u.roles', 'r')
+    ->groupBy('u.id', 'u.name')
+    ->getResult();
+```
+
+##### Performance Tips for Many-to-Many Queries
+
+**Efficient Column Selection:**
+```php
+// Good: Select only needed columns
+$qb->select('u.name', 'r.name')
+   ->from(User::class, 'u')
+   ->innerJoin('u.roles', 'r');
+
+// Avoid: Selecting full entities when not needed
+$qb->select('u', 'r')  // Loads all columns
+   ->from(User::class, 'u')
+   ->innerJoin('u.roles', 'r');
+```
+
+**Filtering Strategies:**
+```php
+// Good: Filter on main entity first
+$qb->from(User::class, 'u')
+   ->innerJoin('u.roles', 'r')
+   ->where('u.active = :active')     // Filter main table first
+   ->andWhere('r.name = :role');     // Then filter joined table
+
+// Good: Use IN clauses for multiple values
+$qb->where('r.name IN (:roles)')
+   ->setParameter('roles', ['admin', 'editor']);
+```
+
 ### One-to-One
 
 ```php

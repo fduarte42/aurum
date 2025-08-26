@@ -216,6 +216,45 @@ $entityManager->persist($adminRole);
 $entityManager->flush();
 ```
 
+### 7. Querying Many-to-Many Relationships
+
+Use the QueryBuilder to easily query across Many-to-Many relationships:
+
+```php
+// Find all users with admin role
+$adminUsers = $entityManager->createQueryBuilder('u')
+    ->select('u', 'r')
+    ->from(User::class, 'u')
+    ->innerJoin('u.roles', 'r')  // Automatic junction table join!
+    ->where('r.name = :role')
+    ->setParameter('role', 'admin')
+    ->getResult();
+
+// Find all roles for active users
+$activeRoles = $entityManager->createQueryBuilder('r')
+    ->select('r')
+    ->from(Role::class, 'r')
+    ->innerJoin('r.users', 'u')  // Inverse side join
+    ->where('u.active = :active')
+    ->setParameter('active', true)
+    ->getResult();
+
+// Complex query: Users with multiple roles
+$powerUsers = $entityManager->createQueryBuilder('u')
+    ->select('u')
+    ->from(User::class, 'u')
+    ->innerJoin('u.roles', 'r')
+    ->where('r.name IN (:roles)')
+    ->setParameter('roles', ['admin', 'moderator'])
+    ->getResult();
+```
+
+**Key Benefits:**
+- **Automatic Junction Table Handling**: No need to manually specify junction table joins
+- **Bidirectional Support**: Query from either side of the relationship
+- **Clean Syntax**: Simple `join('u.roles', 'r')` syntax
+- **Performance Optimized**: Generates efficient SQL with proper indexes
+
 ## Next Steps
 
 Now that you have the basics working, explore these topics:

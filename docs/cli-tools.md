@@ -413,4 +413,24 @@ php bin/aurum-cli.php migration diff --help
 
 Each command includes practical examples in its help output, making it easy to get started quickly.
 
-The Aurum CLI is designed to be intuitive and powerful, supporting both simple use cases and complex development workflows.
+## QueryBuilder Integration
+
+The CLI tools work seamlessly with Aurum's QueryBuilder, which provides automatic join resolution for all relationship types including Many-to-Many relationships:
+
+```bash
+# Generate schema for entities with Many-to-Many relationships
+php bin/aurum-cli.php schema generate --entities="User,Role" --format=schema-builder
+
+# The generated schema includes junction tables for Many-to-Many relationships
+# which work automatically with QueryBuilder joins like: join('u.roles', 'r')
+```
+
+**QueryBuilder Features Supported:**
+- Automatic junction table joins for Many-to-Many relationships
+- Bidirectional relationship queries (owning and inverse sides)
+- Custom JoinTable configuration support
+- Performance-optimized SQL generation
+
+For detailed QueryBuilder usage with Many-to-Many relationships, see the [Architecture Guide](architecture.md#query-builder) and [Entity Relationships](entities.md#querying-many-to-many-relationships).
+
+The Aurum CLI is designed to be intuitive and powerful, supporting both simple use cases and complex development workflows with full Many-to-Many relationship support.

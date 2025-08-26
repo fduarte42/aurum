@@ -126,7 +126,9 @@ class UserRepository extends Repository
 
 ### Query Builder
 
-The Query Builder provides a fluent interface for building complex SQL queries.
+The Query Builder provides a fluent interface for building complex SQL queries with automatic join resolution for all relationship types.
+
+#### Basic Usage
 
 ```php
 $users = $entityManager->createQueryBuilder('u')
@@ -141,12 +143,110 @@ $users = $entityManager->createQueryBuilder('u')
     ->getResult();
 ```
 
+#### Automatic Join Resolution
+
+The QueryBuilder automatically resolves join conditions for all relationship types:
+
+**ManyToOne/OneToMany Relationships:**
+```php
+// Automatic join condition: u.role_id = r.id
+$qb->from(User::class, 'u')->join('u.role', 'r');
+
+// Automatic join condition: u.id = p.user_id
+$qb->from(User::class, 'u')->join('u.posts', 'p');
+```
+
+**Many-to-Many Relationships:**
+```php
+// Automatic junction table joins:
+// INNER JOIN user_roles ur ON u.id = ur.user_id
+// INNER JOIN roles r ON ur.role_id = r.id
+$qb->from(User::class, 'u')->join('u.roles', 'r');
+
+// Inverse side - automatic junction table joins:
+// INNER JOIN user_roles ur ON r.id = ur.role_id
+// INNER JOIN users u ON ur.user_id = u.id
+$qb->from(Role::class, 'r')->join('r.users', 'u');
+```
+
+#### Many-to-Many Query Examples
+
+**Find Users with Specific Roles:**
+```php
+$adminUsers = $entityManager->createQueryBuilder('u')
+    ->select('u', 'r')
+    ->from(User::class, 'u')
+    ->innerJoin('u.roles', 'r')
+    ->where('r.name IN (:roles)')
+    ->setParameter('roles', ['admin', 'moderator'])
+    ->getResult();
+```
+
+**Find Roles with Active Users:**
+```php
+$activeRoles = $entityManager->createQueryBuilder('r')
+    ->select('r', 'u')
+    ->from(Role::class, 'r')
+    ->innerJoin('r.users', 'u')
+    ->where('u.active = :active')
+    ->setParameter('active', true)
+    ->getResult();
+```
+
+**Complex Many-to-Many with Multiple Joins:**
+```php
+$result = $entityManager->createQueryBuilder('u')
+    ->select('u', 'r', 'p')
+    ->from(User::class, 'u')
+    ->innerJoin('u.roles', 'r')
+    ->leftJoin('u.posts', 'p')
+    ->where('r.name = :role')
+    ->andWhere('p.published = :published')
+    ->setParameter('role', 'author')
+    ->setParameter('published', true)
+    ->orderBy('u.name', 'ASC')
+    ->getResult();
+```
+
+#### Performance Considerations for Many-to-Many Queries
+
+**Junction Table Joins:**
+- Many-to-Many queries generate two JOIN operations (source→junction, junction→target)
+- Use `INNER JOIN` for required relationships, `LEFT JOIN` for optional ones
+- Consider adding indexes on junction table foreign key columns for better performance
+
+**Best Practices:**
+```php
+// Good: Specific column selection reduces data transfer
+$qb->select('u.name', 'r.name')
+   ->from(User::class, 'u')
+   ->innerJoin('u.roles', 'r');
+
+// Good: Filter early to reduce junction table scan
+$qb->from(User::class, 'u')
+   ->innerJoin('u.roles', 'r')
+   ->where('u.active = :active')  // Filter on main table first
+   ->andWhere('r.name = :role');  // Then filter on joined table
+
+// Consider: Use EXISTS for existence checks instead of joins
+$qb->from(User::class, 'u')
+   ->where('EXISTS (
+       SELECT 1 FROM user_roles ur
+       INNER JOIN roles r ON ur.role_id = r.id
+       WHERE ur.user_id = u.id AND r.name = :role
+   )');
+```
+
 **Features:**
-- Fluent interface
-- Parameter binding
-- Join support (with auto-resolution)
+- Fluent interface for query construction
+- **Automatic join condition resolution for all relationship types**
+- **Many-to-Many junction table handling**
+- **Bidirectional relationship support**
+- Parameter binding for security
+- Support for complex WHERE clauses
+- Ordering and pagination
 - Subquery support
-- Aggregation functions
+- **Custom JoinTable configuration support**
 
 ### Type System
 

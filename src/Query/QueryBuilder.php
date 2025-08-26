@@ -51,6 +51,15 @@ class QueryBuilder implements QueryBuilderInterface
     {
         $this->from = $table;
         $this->fromAlias = $alias;
+
+        // If table is an entity class, set it as root entity class for auto-join resolution
+        if ($this->metadataFactory && class_exists($table)) {
+            $this->rootEntityClass = $table;
+            // Resolve table name from entity class
+            $metadata = $this->metadataFactory->getMetadataFor($table);
+            $this->from = $metadata->getTableName();
+        }
+
         return $this;
     }
 
@@ -377,12 +386,19 @@ class QueryBuilder implements QueryBuilderInterface
             throw new ORMException("Cannot resolve join condition: MetadataFactory or root entity class not set. Use explicit condition or set metadata factory.");
         }
 
+        // Extract property name from alias.property format (e.g., 'u.roles' -> 'roles')
+        $propertyName = $propertyOrEntity;
+        if (strpos($propertyOrEntity, '.') !== false) {
+            $parts = explode('.', $propertyOrEntity);
+            $propertyName = end($parts);
+        }
+
         $rootMetadata = $this->metadataFactory->getMetadataFor($this->rootEntityClass);
         $associations = $rootMetadata->getAssociationMappings();
 
         // Try to find association by property name
         foreach ($associations as $association) {
-            if ($association->getFieldName() === $propertyOrEntity) {
+            if ($association->getFieldName() === $propertyName) {
                 if ($association->getType() === 'ManyToOne') {
                     // For ManyToOne: root.foreign_key = target.id
                     $joinColumn = $association->getJoinColumn();
@@ -401,11 +417,81 @@ class QueryBuilder implements QueryBuilderInterface
                             return "{$this->fromAlias}.{$rootIdColumn} = {$alias}.{$joinColumn}";
                         }
                     }
+                } elseif ($association->getType() === 'ManyToMany') {
+                    // For ManyToMany: Need to create junction table joins
+                    return $this->resolveManyToManyJoinCondition($association, $alias);
                 }
             }
         }
 
-        throw new ORMException("Cannot resolve join condition for property '{$propertyOrEntity}' in entity '{$this->rootEntityClass}'");
+        throw new ORMException("Cannot resolve join condition for property '{$propertyName}' in entity '{$this->rootEntityClass}'");
+    }
+
+    /**
+     * Resolve Many-to-Many join condition (requires junction table)
+     */
+    private function resolveManyToManyJoinCondition($association, string $alias): string
+    {
+        $rootMetadata = $this->metadataFactory->getMetadataFor($this->rootEntityClass);
+        $targetMetadata = $this->metadataFactory->getMetadataFor($association->getTargetEntity());
+
+        // Handle inverse side relationships
+        if (!$association->isOwningSide()) {
+            // For inverse side, we need to get the join table from the owning side
+            $mappedBy = $association->getMappedBy();
+            $targetAssociations = $targetMetadata->getAssociationMappings();
+
+            if (isset($targetAssociations[$mappedBy])) {
+                $owningAssociation = $targetAssociations[$mappedBy];
+                $joinTable = $owningAssociation->getJoinTable();
+            } else {
+                $joinTable = null;
+            }
+        } else {
+            $joinTable = $association->getJoinTable();
+        }
+
+        // Get junction table information
+        if (!$joinTable) {
+            // Generate default junction table name if not specified
+            $junctionTableName = $rootMetadata->getTableName() . '_' . $targetMetadata->getTableName();
+            $sourceColumn = $rootMetadata->getTableName() . '_id';
+            $targetColumn = $targetMetadata->getTableName() . '_id';
+        } else {
+            $junctionTableName = $joinTable->getName();
+
+            // Get join column names - handle inverse side properly
+            if ($association->isOwningSide()) {
+                $joinColumns = $joinTable->getJoinColumns();
+                $inverseJoinColumns = $joinTable->getInverseJoinColumns();
+                $sourceColumn = !empty($joinColumns) ? $joinColumns[0]->getName() : 'source_id';
+                $targetColumn = !empty($inverseJoinColumns) ? $inverseJoinColumns[0]->getName() : 'target_id';
+            } else {
+                // For inverse side, swap the columns
+                $joinColumns = $joinTable->getJoinColumns();
+                $inverseJoinColumns = $joinTable->getInverseJoinColumns();
+                $sourceColumn = !empty($inverseJoinColumns) ? $inverseJoinColumns[0]->getName() : 'target_id';
+                $targetColumn = !empty($joinColumns) ? $joinColumns[0]->getName() : 'source_id';
+            }
+        }
+
+        // Generate unique alias for junction table
+        $junctionAlias = 'jt_' . uniqid();
+
+        // Add junction table join to the joins array
+        $rootIdColumn = $rootMetadata->getIdentifierColumnName();
+        $targetIdColumn = $targetMetadata->getIdentifierColumnName();
+
+        // First join: source entity to junction table
+        $this->joins[] = [
+            'type' => 'INNER',
+            'table' => $junctionTableName,
+            'alias' => $junctionAlias,
+            'condition' => "{$this->fromAlias}.{$rootIdColumn} = {$junctionAlias}.{$sourceColumn}"
+        ];
+
+        // Return condition for second join: junction table to target entity
+        return "{$junctionAlias}.{$targetColumn} = {$alias}.{$targetIdColumn}";
     }
 
     /**
@@ -418,12 +504,19 @@ class QueryBuilder implements QueryBuilderInterface
             return $propertyOrEntity;
         }
 
+        // Extract property name from alias.property format (e.g., 'u.roles' -> 'roles')
+        $propertyName = $propertyOrEntity;
+        if (strpos($propertyOrEntity, '.') !== false) {
+            $parts = explode('.', $propertyOrEntity);
+            $propertyName = end($parts);
+        }
+
         $rootMetadata = $this->metadataFactory->getMetadataFor($this->rootEntityClass);
         $associations = $rootMetadata->getAssociationMappings();
 
         // Try to find association by property name
         foreach ($associations as $association) {
-            if ($association->getFieldName() === $propertyOrEntity) {
+            if ($association->getFieldName() === $propertyName) {
                 $targetEntityClass = $association->getTargetEntity();
                 $targetMetadata = $this->metadataFactory->getMetadataFor($targetEntityClass);
                 return $targetMetadata->getTableName();
@@ -431,11 +524,11 @@ class QueryBuilder implements QueryBuilderInterface
         }
 
         // If not found as property, assume it's already a table name or entity class
-        if (class_exists($propertyOrEntity)) {
-            $metadata = $this->metadataFactory->getMetadataFor($propertyOrEntity);
+        if (class_exists($propertyName)) {
+            $metadata = $this->metadataFactory->getMetadataFor($propertyName);
             return $metadata->getTableName();
         }
 
-        return $propertyOrEntity;
+        return $propertyName;
     }
 }

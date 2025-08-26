@@ -10,6 +10,7 @@ Welcome to the comprehensive documentation for Aurum ORM - a modern PHP ORM desi
 
 ### Core Features
 - **[Entity Management](entities.md)** - How to define entities, relationships, and use attributes
+- **[QueryBuilder API](querybuilder-api.md)** - Complete API reference for the QueryBuilder with Many-to-Many support
 - **[CLI Tools Guide](cli-tools.md)** - Complete guide to the unified `aurum-cli.php` tool
 - **[Migration System](migrations.md)** - How to create, run, and manage database migrations
 
@@ -52,6 +53,15 @@ $entityManager = ContainerBuilder::createEntityManager($config);
 $user = new User('john@example.com');
 $entityManager->persist($user);
 $entityManager->flush();
+
+// Query with automatic Many-to-Many joins
+$adminUsers = $entityManager->createQueryBuilder('u')
+    ->select('u', 'r')
+    ->from(User::class, 'u')
+    ->innerJoin('u.roles', 'r')  // Automatic junction table join!
+    ->where('r.name = :role')
+    ->setParameter('role', 'admin')
+    ->getResult();
 ```
 
 ### CLI Tools
@@ -84,7 +94,7 @@ php bin/aurum-cli.php schema generate
 - **Clean separation** of concerns
 - **Dependency injection** container
 - **Repository pattern** with custom repositories
-- **Query builder** with fluent interface
+- **Query builder** with fluent interface and **Many-to-Many automatic joins**
 - **Unit of Work** pattern for change tracking
 
 ### Database Support
@@ -113,26 +123,36 @@ Deep dive into how Aurum works:
 Complete guide to working with entities:
 - Entity definition with attributes
 - Column types and options
-- Relationships (OneToMany, ManyToOne, etc.)
+- Relationships (OneToMany, ManyToOne, **Many-to-Many**)
+- **Many-to-Many QueryBuilder examples**
 - Custom repositories
 - Best practices
 
-### 4. [CLI Tools Guide](cli-tools.md)
+### 4. [QueryBuilder API Reference](querybuilder-api.md)
+Complete API documentation for the QueryBuilder:
+- **Many-to-Many automatic join resolution**
+- Bidirectional relationship queries
+- Custom JoinTable configuration support
+- Performance optimization techniques
+- Error handling and best practices
+
+### 5. [CLI Tools Guide](cli-tools.md)
 Master the powerful CLI tools:
 - Schema generation in multiple formats
+- **Many-to-Many junction table generation**
 - Migration diff creation
 - Namespace-based operations
 - Auto-discovery features
 - Integration with development workflow
 
-### 5. [Migration System](migrations.md)
+### 6. [Migration System](migrations.md)
 Database schema evolution:
 - Creating and running migrations
 - Schema builder integration
 - Data migrations
 - Best practices and troubleshooting
 
-### 6. [Testing Guide](testing.md)
+### 7. [Testing Guide](testing.md)
 Comprehensive testing approach:
 - Running the test suite
 - Writing unit and integration tests
@@ -140,7 +160,7 @@ Comprehensive testing approach:
 - CLI command testing
 - Performance testing
 
-### 7. [Contributing Guide](contributing.md)
+### 8. [Contributing Guide](contributing.md)
 For contributors and maintainers:
 - Development setup
 - Code style guidelines
@@ -191,8 +211,9 @@ Aurum includes a comprehensive test suite:
 ```
 
 **Test Results:**
-- ✅ 620 tests, 1485 assertions
-- ✅ All tests passing
+- ✅ **644 tests, 1557 assertions**
+- ✅ **All tests passing** (100% success rate)
+- ✅ **Many-to-Many QueryBuilder tests** included
 - ✅ SQLite in-memory databases for speed
 - ✅ Comprehensive CLI testing
 
@@ -222,7 +243,12 @@ Check the `examples/` directory for working code samples:
 
 ## 🗺️ Roadmap
 
-Future enhancements being considered:
+**Recently Completed:**
+- ✅ **Many-to-Many relationship support** with automatic QueryBuilder joins
+- ✅ **Schema-builder format** as default for migration diff
+- ✅ **Comprehensive Many-to-Many documentation** and examples
+
+**Future enhancements being considered:**
 - Additional database platform support
 - Event system for entity lifecycle
 - Advanced caching strategies
