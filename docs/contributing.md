@@ -18,7 +18,7 @@ Thank you for your interest in contributing to Aurum ORM! This guide will help y
 
 ```bash
 # Fork the repository on GitHub, then clone your fork
-git clone https://github.com/YOUR_USERNAME/aurum.git
+git clone https://github.com/fduarte42/aurum.git
 cd aurum
 ```
 
