@@ -212,10 +212,21 @@ class User
 
 ### Many-to-Many
 
+Many-to-Many relationships allow entities to be associated with multiple instances of another entity type through a junction table.
+
+#### Basic Many-to-Many
+
 ```php
 #[Entity(table: 'users')]
 class User
 {
+    #[Id]
+    #[Column(type: 'uuid')]
+    private ?string $id = null;
+
+    #[Column(type: 'string', length: 255)]
+    private string $name;
+
     #[ManyToMany(targetEntity: Role::class)]
     #[JoinTable(
         name: 'user_roles',
@@ -223,6 +234,11 @@ class User
         inverseJoinColumns: [new JoinColumn(name: 'role_id', referencedColumnName: 'id')]
     )]
     private array $roles = [];
+
+    public function __construct(string $name)
+    {
+        $this->name = $name;
+    }
 
     public function getRoles(): array
     {
@@ -233,6 +249,15 @@ class User
     {
         if (!in_array($role, $this->roles, true)) {
             $this->roles[] = $role;
+        }
+    }
+
+    public function removeRole(Role $role): void
+    {
+        $key = array_search($role, $this->roles, true);
+        if ($key !== false) {
+            unset($this->roles[$key]);
+            $this->roles = array_values($this->roles);
         }
     }
 }
@@ -249,7 +274,84 @@ class Role
 
     #[ManyToMany(targetEntity: User::class, mappedBy: 'roles')]
     private array $users = [];
+
+    public function __construct(string $name)
+    {
+        $this->name = $name;
+    }
+
+    public function getUsers(): array
+    {
+        return $this->users;
+    }
 }
+```
+
+#### Many-to-Many with Cascade Operations
+
+```php
+#[Entity(table: 'articles')]
+class Article
+{
+    #[Id]
+    #[Column(type: 'uuid')]
+    private ?string $id = null;
+
+    #[Column(type: 'string', length: 255)]
+    private string $title;
+
+    #[ManyToMany(targetEntity: Tag::class, cascade: ['persist', 'remove'])]
+    #[JoinTable(name: 'article_tags')]
+    private array $tags = [];
+
+    public function addTag(Tag $tag): void
+    {
+        if (!in_array($tag, $this->tags, true)) {
+            $this->tags[] = $tag;
+        }
+    }
+}
+
+#[Entity(table: 'tags')]
+class Tag
+{
+    #[Id]
+    #[Column(type: 'uuid')]
+    private ?string $id = null;
+
+    #[Column(type: 'string', length: 100)]
+    private string $name;
+
+    #[ManyToMany(targetEntity: Article::class, mappedBy: 'tags')]
+    private array $articles = [];
+}
+```
+
+#### Working with Many-to-Many Relationships
+
+```php
+// Create entities
+$user = new User('John Doe');
+$adminRole = new Role('admin');
+$userRole = new Role('user');
+
+// Add roles to user
+$user->addRole($adminRole);
+$user->addRole($userRole);
+
+// Persist entities
+$entityManager->persist($user);
+$entityManager->persist($adminRole);
+$entityManager->persist($userRole);
+$entityManager->flush();
+
+// Load user with roles
+$foundUser = $entityManager->find(User::class, $user->getId());
+$roles = $foundUser->getRoles();
+
+// Remove a role
+$foundUser->removeRole($adminRole);
+$entityManager->flush();
 ```
 
 ### One-to-One

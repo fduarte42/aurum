@@ -122,14 +122,17 @@ The migration diff command compares your current database schema with your entit
 ### Basic Usage
 
 ```bash
-# Preview migration diff without creating files
+# Show schema-builder format migration diff (default)
+php bin/aurum-cli.php migration diff --entities="User,Post"
+
+# Preview raw SQL migration diff
 php bin/aurum-cli.php migration diff --entities="User,Post" --preview
 
 # Generate migration file
 php bin/aurum-cli.php migration diff --entities="User,Post" --name="UpdateUserSchema"
 
 # Process all entities in a namespace
-php bin/aurum-cli.php migration diff --namespace="App\Entity" --preview
+php bin/aurum-cli.php migration diff --namespace="App\Entity"
 ```
 
 ### Migration Diff Options
@@ -142,9 +145,38 @@ php bin/aurum-cli.php migration diff --namespace="App\Entity" --preview
 
 ### Output Modes
 
-#### Preview Mode
+#### Schema-Builder Format (Default)
 
-Shows the migration diff without creating any files:
+Shows the migration diff in schema-builder format:
+
+```bash
+php bin/aurum-cli.php migration diff
+```
+
+Output:
+```
+SCHEMA BUILDER FORMAT (Default)
+========================================
+    public function up(SchemaBuilderInterface $schemaBuilder): void
+    {
+        $schemaBuilder->table('users')
+            ->addColumn('phone', 'string')
+            ->save();
+    }
+
+DOWN MIGRATION
+========================================
+    public function down(SchemaBuilderInterface $schemaBuilder): void
+    {
+        $schemaBuilder->table('users')
+            ->removeColumn('phone')
+            ->save();
+    }
+```
+
+#### Preview Mode (Raw SQL)
+
+Shows the migration diff in raw SQL format:
 
 ```bash
 php bin/aurum-cli.php migration diff --preview
@@ -159,7 +191,7 @@ UP MIGRATION (Current -> Target)
         $connection->execute('ALTER TABLE users ADD COLUMN phone VARCHAR(20)');
     }
 
-DOWN MIGRATION (Target -> Current)  
+DOWN MIGRATION (Target -> Current)
 ========================================
     public function down(ConnectionInterface $connection): void
     {

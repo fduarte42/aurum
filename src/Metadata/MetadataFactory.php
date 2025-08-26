@@ -7,6 +7,9 @@ namespace Fduarte42\Aurum\Metadata;
 use Fduarte42\Aurum\Attribute\Column;
 use Fduarte42\Aurum\Attribute\Entity;
 use Fduarte42\Aurum\Attribute\Id;
+use Fduarte42\Aurum\Attribute\JoinColumn;
+use Fduarte42\Aurum\Attribute\JoinTable;
+use Fduarte42\Aurum\Attribute\ManyToMany;
 use Fduarte42\Aurum\Attribute\ManyToOne;
 use Fduarte42\Aurum\Attribute\OneToMany;
 use Fduarte42\Aurum\Exception\ORMException;
@@ -77,7 +80,8 @@ class MetadataFactory
     private function hasAssociationAttribute(ReflectionProperty $property): bool
     {
         return !empty($property->getAttributes(ManyToOne::class)) ||
-               !empty($property->getAttributes(OneToMany::class));
+               !empty($property->getAttributes(OneToMany::class)) ||
+               !empty($property->getAttributes(ManyToMany::class));
     }
 
     private function processProperty(EntityMetadata $metadata, ReflectionProperty $property): void
@@ -220,6 +224,36 @@ class MetadataFactory
                 cascade: $attribute->cascade
             );
             
+            $metadata->addAssociationMapping($associationMapping);
+        }
+
+        // ManyToMany
+        $manyToManyAttributes = $property->getAttributes(ManyToMany::class);
+        if (!empty($manyToManyAttributes)) {
+            $attribute = $manyToManyAttributes[0]->newInstance();
+
+            // Get JoinTable configuration if present
+            $joinTableAttributes = $property->getAttributes(JoinTable::class);
+            $joinTable = null;
+            if (!empty($joinTableAttributes)) {
+                $joinTable = $joinTableAttributes[0]->newInstance();
+            }
+
+            $associationMapping = new AssociationMapping(
+                fieldName: $fieldName,
+                targetEntity: $attribute->targetEntity,
+                type: 'ManyToMany',
+                isOwningSide: $attribute->isOwningSide(),
+                mappedBy: $attribute->mappedBy,
+                inversedBy: $attribute->inversedBy,
+                joinColumn: null,
+                referencedColumnName: null,
+                lazy: true, // ManyToMany is always lazy by default
+                nullable: true,
+                cascade: $attribute->cascade,
+                joinTable: $joinTable
+            );
+
             $metadata->addAssociationMapping($associationMapping);
         }
     }

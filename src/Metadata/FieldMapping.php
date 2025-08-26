@@ -82,6 +82,11 @@ class FieldMapping implements FieldMappingInterface
         return $this->isIdentifier;
     }
 
+    public function isPrimaryKey(): bool
+    {
+        return $this->isIdentifier;
+    }
+
     public function isGenerated(): bool
     {
         return $this->isGenerated;

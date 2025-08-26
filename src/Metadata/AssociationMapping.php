@@ -20,7 +20,8 @@ class AssociationMapping implements AssociationMappingInterface
         private readonly ?string $referencedColumnName = null,
         private readonly bool $lazy = true,
         private readonly bool $nullable = true,
-        private readonly array $cascade = []
+        private readonly array $cascade = [],
+        private readonly mixed $joinTable = null
     ) {
     }
 
@@ -82,5 +83,15 @@ class AssociationMapping implements AssociationMappingInterface
     public function isCascade(string $cascade): bool
     {
         return in_array($cascade, $this->cascade, true) || in_array('all', $this->cascade, true);
+    }
+
+    public function getJoinTable(): mixed
+    {
+        return $this->joinTable;
+    }
+
+    public function isManyToMany(): bool
+    {
+        return $this->type === 'ManyToMany';
     }
 }

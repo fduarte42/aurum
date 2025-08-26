@@ -65,7 +65,10 @@ ENTITY SELECTION:
   If neither --entities nor --namespace is provided, all registered entities will be processed.
 
 EXAMPLES:
-  # Preview migration diff for specific entities
+  # Show schema-builder format for specific entities (default)
+  php bin/aurum-cli.php migration diff --entities=\"User,Post\"
+
+  # Preview raw SQL migration diff for specific entities
   php bin/aurum-cli.php migration diff --entities=\"User,Post\" --preview
 
   # Generate migration file for entities in namespace
@@ -74,14 +77,15 @@ EXAMPLES:
   # Generate migration for all entities and save to custom file
   php bin/aurum-cli.php migration diff --output=my-migration.php
 
-  # Auto-discover all entities and preview changes
-  php bin/aurum-cli.php migration diff --preview
+  # Auto-discover all entities and show schema-builder format
+  php bin/aurum-cli.php migration diff
 
   # Generate migration file for all registered entities
   php bin/aurum-cli.php migration diff --name=\"UpdateAllEntities\"
 
 MIGRATION MODES:
-  --preview             Show migration diff without creating files
+  (default)             Show schema-builder format migration code
+  --preview             Show raw SQL migration diff without creating files
   --name=<name>         Generate official migration file with version
   --output=<file>       Save to custom file location
 
@@ -127,12 +131,15 @@ MIGRATION MODES:
             }
 
             // Handle different output modes
-            if (isset($options['preview']) || (!isset($options['name']) && !isset($options['output']))) {
+            if (isset($options['preview'])) {
                 $this->outputMigrationCode($diff);
             } elseif (isset($options['name'])) {
                 $this->generateMigrationFile($diff, $options['name']);
             } elseif (isset($options['output'])) {
                 $this->saveMigrationToFile($options['output'], $diff, $options['name'] ?? 'SchemaDiff');
+            } else {
+                // Default to schema-builder format output
+                $this->outputSchemaBuilderCode($diff);
             }
 
             $this->success("✅ Migration diff completed!");
@@ -227,6 +234,101 @@ MIGRATION MODES:
         echo "\n";
         $this->info("💡 Use --name=\"MigrationName\" to generate a migration file");
         $this->info("💡 Use --output=migration.php to save to a custom file");
+    }
+
+    /**
+     * Output schema-builder format code to console (default format)
+     */
+    private function outputSchemaBuilderCode(array $diff): void
+    {
+        $this->info(str_repeat('=', 60));
+        $this->info("SCHEMA BUILDER FORMAT (Default)");
+        $this->info(str_repeat('=', 60));
+
+        if (!empty(trim($diff['up']))) {
+            echo "    public function up(SchemaBuilderInterface \$schemaBuilder): void\n";
+            echo "    {\n";
+            echo $this->convertToSchemaBuilder($diff['up']);
+            echo "    }\n";
+        } else {
+            echo "    // No changes needed\n";
+        }
+
+        $this->info("\n" . str_repeat('=', 60));
+        $this->info("DOWN MIGRATION");
+        $this->info(str_repeat('=', 60));
+
+        if (!empty(trim($diff['down']))) {
+            echo "    public function down(SchemaBuilderInterface \$schemaBuilder): void\n";
+            echo "    {\n";
+            echo $this->convertToSchemaBuilder($diff['down']);
+            echo "    }\n";
+        } else {
+            echo "    // No changes needed\n";
+        }
+
+        echo "\n";
+        $this->info("💡 Use --preview to see raw SQL format");
+        $this->info("💡 Use --name=\"MigrationName\" to generate a migration file");
+        $this->info("💡 Use --output=migration.php to save to a custom file");
+    }
+
+    /**
+     * Convert SQL statements to SchemaBuilder format
+     */
+    private function convertToSchemaBuilder(string $sql): string
+    {
+        $lines = explode("\n", trim($sql));
+        $schemaBuilderCode = "";
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line)) continue;
+
+            // Convert CREATE TABLE statements
+            if (preg_match('/CREATE TABLE\s+`?(\w+)`?\s*\(/i', $line, $matches)) {
+                $tableName = $matches[1];
+                $schemaBuilderCode .= "        \$schemaBuilder->createTable('{$tableName}')\n";
+                continue;
+            }
+
+            // Convert ALTER TABLE ADD COLUMN statements
+            if (preg_match('/ALTER TABLE\s+`?(\w+)`?\s+ADD\s+COLUMN\s+`?(\w+)`?\s+(\w+)/i', $line, $matches)) {
+                $tableName = $matches[1];
+                $columnName = $matches[2];
+                $columnType = strtolower($matches[3]);
+                $schemaBuilderCode .= "        \$schemaBuilder->table('{$tableName}')\n";
+                $schemaBuilderCode .= "            ->addColumn('{$columnName}', '{$columnType}')\n";
+                $schemaBuilderCode .= "            ->save();\n";
+                continue;
+            }
+
+            // Convert ALTER TABLE DROP COLUMN statements
+            if (preg_match('/ALTER TABLE\s+`?(\w+)`?\s+DROP\s+COLUMN\s+`?(\w+)`?/i', $line, $matches)) {
+                $tableName = $matches[1];
+                $columnName = $matches[2];
+                $schemaBuilderCode .= "        \$schemaBuilder->table('{$tableName}')\n";
+                $schemaBuilderCode .= "            ->removeColumn('{$columnName}')\n";
+                $schemaBuilderCode .= "            ->save();\n";
+                continue;
+            }
+
+            // Convert DROP TABLE statements
+            if (preg_match('/DROP TABLE\s+`?(\w+)`?/i', $line, $matches)) {
+                $tableName = $matches[1];
+                $schemaBuilderCode .= "        \$schemaBuilder->dropTable('{$tableName}');\n";
+                continue;
+            }
+
+            // For other SQL statements, add as raw SQL with comment
+            if (!empty($line) && !str_ends_with($line, ';')) {
+                $line .= ';';
+            }
+            $schemaBuilderCode .= "        // Raw SQL: {$line}\n";
+            $schemaBuilderCode .= "        \$schemaBuilder->execute('{$line}');\n";
+        }
+
+        return $schemaBuilderCode;
     }
 
     /**

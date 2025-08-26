@@ -242,11 +242,12 @@ class EntityManagerTest extends TestCase
 
     public function testFlushWithoutTransaction(): void
     {
-        // Flush without transaction should throw an exception
-        $this->expectException(\Fduarte42\Aurum\Exception\ORMException::class);
-        $this->expectExceptionMessage('No active transaction found');
-
+        // EntityManager now automatically handles transactions during flush
+        // This should not throw an exception
         $this->entityManager->flush();
+
+        // Verify that the flush completed successfully
+        $this->assertTrue(true);
     }
 
     public function testClearAllUnitOfWorks(): void

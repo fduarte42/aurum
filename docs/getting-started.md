@@ -161,6 +161,61 @@ $entityManager->remove($foundUser);
 $entityManager->flush();
 ```
 
+### 6. Working with Relationships
+
+Define relationships between entities using attributes:
+
+```php
+<?php
+// Many-to-Many relationship example
+
+#[Entity(table: 'users')]
+class User
+{
+    #[Id]
+    #[Column(type: 'uuid')]
+    private ?string $id = null;
+
+    #[Column(type: 'string', length: 255)]
+    private string $name;
+
+    #[ManyToMany(targetEntity: Role::class)]
+    #[JoinTable(name: 'user_roles')]
+    private array $roles = [];
+
+    public function addRole(Role $role): void
+    {
+        if (!in_array($role, $this->roles, true)) {
+            $this->roles[] = $role;
+        }
+    }
+}
+
+#[Entity(table: 'roles')]
+class Role
+{
+    #[Id]
+    #[Column(type: 'uuid')]
+    private ?string $id = null;
+
+    #[Column(type: 'string', length: 100)]
+    private string $name;
+
+    #[ManyToMany(targetEntity: User::class, mappedBy: 'roles')]
+    private array $users = [];
+}
+
+// Usage
+$user = new User('john@example.com', 'John Doe');
+$adminRole = new Role('admin');
+
+$user->addRole($adminRole);
+
+$entityManager->persist($user);
+$entityManager->persist($adminRole);
+$entityManager->flush();
+```
+
 ## Next Steps
 
 Now that you have the basics working, explore these topics:

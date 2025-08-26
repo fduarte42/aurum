@@ -67,7 +67,7 @@ class SchemaGeneratorTest extends TestCase
         ]);
 
         $this->metadataFactory
-            ->expects($this->once())
+            ->expects($this->atLeastOnce())
             ->method('getMetadataFor')
             ->with('User')
             ->willReturn($metadata);
@@ -98,7 +98,7 @@ class SchemaGeneratorTest extends TestCase
         ]);
 
         $this->metadataFactory
-            ->expects($this->exactly(2))
+            ->expects($this->atLeastOnce())
             ->method('getMetadataFor')
             ->willReturnMap([
                 ['User', $userMetadata],
@@ -130,7 +130,7 @@ class SchemaGeneratorTest extends TestCase
         ]);
 
         $this->metadataFactory
-            ->expects($this->once())
+            ->expects($this->atLeastOnce())
             ->method('getMetadataFor')
             ->with('User')
             ->willReturn($metadata);
@@ -206,7 +206,7 @@ class SchemaGeneratorTest extends TestCase
         ]);
 
         $this->metadataFactory
-            ->expects($this->once())
+            ->expects($this->atLeastOnce())
             ->method('getMetadataFor')
             ->with('Product')
             ->willReturn($metadata);
@@ -233,7 +233,7 @@ class SchemaGeneratorTest extends TestCase
         ]);
 
         $this->metadataFactory
-            ->expects($this->once())
+            ->expects($this->atLeastOnce())
             ->method('getMetadataFor')
             ->with('User')
             ->willReturn($metadata);
@@ -261,7 +261,7 @@ class SchemaGeneratorTest extends TestCase
         ]);
 
         $this->metadataFactory
-            ->expects($this->once())
+            ->expects($this->atLeastOnce())
             ->method('getMetadataFor')
             ->with('User')
             ->willReturn($metadata);
@@ -289,7 +289,7 @@ class SchemaGeneratorTest extends TestCase
         ]);
 
         $this->metadataFactory
-            ->expects($this->once())
+            ->expects($this->atLeastOnce())
             ->method('getMetadataFor')
             ->with('User')
             ->willReturn($metadata);

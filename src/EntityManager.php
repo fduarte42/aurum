@@ -107,7 +107,24 @@ class EntityManager implements EntityManagerInterface
 
     public function flush(): void
     {
-        $this->currentUnitOfWork->flush();
+        $wasInTransaction = $this->connection->inTransaction();
+
+        if (!$wasInTransaction) {
+            $this->connection->beginTransaction();
+        }
+
+        try {
+            $this->currentUnitOfWork->flush();
+
+            if (!$wasInTransaction) {
+                $this->connection->commit();
+            }
+        } catch (\Throwable $e) {
+            if (!$wasInTransaction) {
+                $this->connection->rollback();
+            }
+            throw $e;
+        }
     }
 
     public function clear(): void

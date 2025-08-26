@@ -32,9 +32,17 @@ class SchemaGenerator
         $code .= "use Fduarte42\\Aurum\\Migration\\Schema\\SchemaBuilderInterface;\n\n";
         $code .= "function createSchema(SchemaBuilderInterface \$schemaBuilder): void\n{\n";
 
+        // Generate entity tables
         foreach ($entityClasses as $entityClass) {
             $metadata = $this->metadataFactory->getMetadataFor($entityClass);
             $code .= $this->generateTableSchemaBuilder($metadata);
+            $code .= "\n";
+        }
+
+        // Generate junction tables for Many-to-Many relationships
+        $junctionTables = $this->collectJunctionTables($entityClasses);
+        foreach ($junctionTables as $junctionTable) {
+            $code .= $this->generateJunctionTableSchemaBuilder($junctionTable);
             $code .= "\n";
         }
 
@@ -53,9 +61,17 @@ class SchemaGenerator
         $sql = "-- Generated SQL DDL for {$platform}\n";
         $sql .= "-- This SQL can be executed directly on the database\n\n";
 
+        // Generate entity tables
         foreach ($entityClasses as $entityClass) {
             $metadata = $this->metadataFactory->getMetadataFor($entityClass);
             $sql .= $this->generateTableSql($metadata, $schemaBuilder);
+            $sql .= "\n";
+        }
+
+        // Generate junction tables for Many-to-Many relationships
+        $junctionTables = $this->collectJunctionTables($entityClasses);
+        foreach ($junctionTables as $junctionTable) {
+            $sql .= $this->generateJunctionTableSql($junctionTable, $schemaBuilder);
             $sql .= "\n";
         }
 
@@ -504,5 +520,249 @@ class SchemaGenerator
 
         return "ALTER TABLE `{$tableName}` ADD CONSTRAINT `{$constraintName}` " .
                "FOREIGN KEY ({$columns}) REFERENCES `{$referencedTable}` ({$referencedColumns});\n";
+    }
+
+    /**
+     * Collect junction tables from Many-to-Many relationships
+     */
+    private function collectJunctionTables(array $entityClasses): array
+    {
+        $junctionTables = [];
+        $processedTables = [];
+
+        foreach ($entityClasses as $entityClass) {
+            $metadata = $this->metadataFactory->getMetadataFor($entityClass);
+
+            foreach ($metadata->getAssociationMappings() as $fieldName => $mapping) {
+                if ($mapping->isManyToMany() && $mapping->isOwningSide()) {
+                    $joinTable = $mapping->getJoinTable();
+
+                    if ($joinTable) {
+                        $tableName = $joinTable->getName();
+
+                        // Avoid duplicates
+                        if (!in_array($tableName, $processedTables)) {
+                            $junctionTables[] = [
+                                'name' => $tableName,
+                                'joinTable' => $joinTable,
+                                'sourceEntity' => $entityClass,
+                                'targetEntity' => $mapping->getTargetEntity(),
+                                'mapping' => $mapping
+                            ];
+                            $processedTables[] = $tableName;
+                        }
+                    } else {
+                        // Generate default junction table name
+                        $sourceTable = $metadata->getTableName();
+                        $targetMetadata = $this->metadataFactory->getMetadataFor($mapping->getTargetEntity());
+                        $targetTable = $targetMetadata->getTableName();
+
+                        $tableName = $sourceTable . '_' . $targetTable;
+
+                        if (!in_array($tableName, $processedTables)) {
+                            $junctionTables[] = [
+                                'name' => $tableName,
+                                'joinTable' => null,
+                                'sourceEntity' => $entityClass,
+                                'targetEntity' => $mapping->getTargetEntity(),
+                                'mapping' => $mapping
+                            ];
+                            $processedTables[] = $tableName;
+                        }
+                    }
+                }
+            }
+        }
+
+        return $junctionTables;
+    }
+
+    /**
+     * Generate SchemaBuilder code for a junction table
+     */
+    private function generateJunctionTableSchemaBuilder(array $junctionTable): string
+    {
+        $tableName = $junctionTable['name'];
+        $sourceEntity = $junctionTable['sourceEntity'];
+        $targetEntity = $junctionTable['targetEntity'];
+        $joinTable = $junctionTable['joinTable'];
+
+        $sourceMetadata = $this->metadataFactory->getMetadataFor($sourceEntity);
+        $targetMetadata = $this->metadataFactory->getMetadataFor($targetEntity);
+
+        $code = "    // Junction table: {$tableName}\n";
+        $code .= "    \$schemaBuilder->createTable('{$tableName}')\n";
+
+        // Add source entity foreign key
+        $sourceIdField = $this->getPrimaryKeyField($sourceMetadata);
+        $sourceColumnName = $this->getJunctionColumnName($joinTable, 'join', $sourceMetadata->getTableName() . '_id');
+        $code .= "        ->addColumn('{$sourceColumnName}', '{$sourceIdField['type']}', ['nullable' => false])\n";
+
+        // Add target entity foreign key
+        $targetIdField = $this->getPrimaryKeyField($targetMetadata);
+        $targetColumnName = $this->getJunctionColumnName($joinTable, 'inverse', $targetMetadata->getTableName() . '_id');
+        $code .= "        ->addColumn('{$targetColumnName}', '{$targetIdField['type']}', ['nullable' => false])\n";
+
+        // Add primary key
+        $code .= "        ->setPrimaryKey(['{$sourceColumnName}', '{$targetColumnName}'])\n";
+
+        // Add foreign keys
+        $code .= "        ->addForeignKeyConstraint('{$sourceMetadata->getTableName()}', ['{$sourceColumnName}'], ['{$sourceIdField['name']}'])\n";
+        $code .= "        ->addForeignKeyConstraint('{$targetMetadata->getTableName()}', ['{$targetColumnName}'], ['{$targetIdField['name']}'])\n";
+
+        $code .= "        ->create();\n";
+
+        return $code;
+    }
+
+    /**
+     * Generate SQL DDL for a junction table
+     */
+    private function generateJunctionTableSql(array $junctionTable, $schemaBuilder): string
+    {
+        $tableName = $junctionTable['name'];
+        $sourceEntity = $junctionTable['sourceEntity'];
+        $targetEntity = $junctionTable['targetEntity'];
+        $joinTable = $junctionTable['joinTable'];
+
+        $sourceMetadata = $this->metadataFactory->getMetadataFor($sourceEntity);
+        $targetMetadata = $this->metadataFactory->getMetadataFor($targetEntity);
+
+        $platform = $this->connection->getPlatform();
+
+        if ($platform === 'sqlite') {
+            return $this->generateSqliteJunctionTableSql($junctionTable);
+        } else {
+            return $this->generateMariaDbJunctionTableSql($junctionTable);
+        }
+    }
+
+    /**
+     * Generate SQLite junction table SQL
+     */
+    private function generateSqliteJunctionTableSql(array $junctionTable): string
+    {
+        $tableName = $junctionTable['name'];
+        $sourceEntity = $junctionTable['sourceEntity'];
+        $targetEntity = $junctionTable['targetEntity'];
+        $joinTable = $junctionTable['joinTable'];
+
+        $sourceMetadata = $this->metadataFactory->getMetadataFor($sourceEntity);
+        $targetMetadata = $this->metadataFactory->getMetadataFor($targetEntity);
+
+        $sourceIdField = $this->getPrimaryKeyField($sourceMetadata);
+        $targetIdField = $this->getPrimaryKeyField($targetMetadata);
+
+        $sourceColumnName = $this->getJunctionColumnName($joinTable, 'join', $sourceMetadata->getTableName() . '_id');
+        $targetColumnName = $this->getJunctionColumnName($joinTable, 'inverse', $targetMetadata->getTableName() . '_id');
+
+        $sql = "-- Junction table: {$tableName}\n";
+        $sql .= "CREATE TABLE {$tableName} (\n";
+
+        // Create dummy field mappings for type conversion
+        $sourceMapping = $this->createDummyFieldMapping($sourceIdField['type']);
+        $targetMapping = $this->createDummyFieldMapping($targetIdField['type']);
+
+        $sql .= "    {$sourceColumnName} {$this->mapTypeToSqlite($sourceIdField['type'], $sourceMapping)} NOT NULL,\n";
+        $sql .= "    {$targetColumnName} {$this->mapTypeToSqlite($targetIdField['type'], $targetMapping)} NOT NULL,\n";
+        $sql .= "    PRIMARY KEY ({$sourceColumnName}, {$targetColumnName}),\n";
+        $sql .= "    FOREIGN KEY ({$sourceColumnName}) REFERENCES {$sourceMetadata->getTableName()}({$sourceIdField['name']}),\n";
+        $sql .= "    FOREIGN KEY ({$targetColumnName}) REFERENCES {$targetMetadata->getTableName()}({$targetIdField['name']})\n";
+        $sql .= ");\n";
+
+        return $sql;
+    }
+
+    /**
+     * Generate MariaDB junction table SQL
+     */
+    private function generateMariaDbJunctionTableSql(array $junctionTable): string
+    {
+        $tableName = $junctionTable['name'];
+        $sourceEntity = $junctionTable['sourceEntity'];
+        $targetEntity = $junctionTable['targetEntity'];
+        $joinTable = $junctionTable['joinTable'];
+
+        $sourceMetadata = $this->metadataFactory->getMetadataFor($sourceEntity);
+        $targetMetadata = $this->metadataFactory->getMetadataFor($targetEntity);
+
+        $sourceIdField = $this->getPrimaryKeyField($sourceMetadata);
+        $targetIdField = $this->getPrimaryKeyField($targetMetadata);
+
+        $sourceColumnName = $this->getJunctionColumnName($joinTable, 'join', $sourceMetadata->getTableName() . '_id');
+        $targetColumnName = $this->getJunctionColumnName($joinTable, 'inverse', $targetMetadata->getTableName() . '_id');
+
+        $sql = "-- Junction table: {$tableName}\n";
+        $sql .= "CREATE TABLE `{$tableName}` (\n";
+
+        // Create dummy field mappings for type conversion
+        $sourceMapping = $this->createDummyFieldMapping($sourceIdField['type']);
+        $targetMapping = $this->createDummyFieldMapping($targetIdField['type']);
+
+        $sql .= "    `{$sourceColumnName}` {$this->mapTypeToMariaDb($sourceIdField['type'], $sourceMapping)} NOT NULL,\n";
+        $sql .= "    `{$targetColumnName}` {$this->mapTypeToMariaDb($targetIdField['type'], $targetMapping)} NOT NULL,\n";
+        $sql .= "    PRIMARY KEY (`{$sourceColumnName}`, `{$targetColumnName}`),\n";
+        $sql .= "    FOREIGN KEY (`{$sourceColumnName}`) REFERENCES `{$sourceMetadata->getTableName()}`(`{$sourceIdField['name']}`),\n";
+        $sql .= "    FOREIGN KEY (`{$targetColumnName}`) REFERENCES `{$targetMetadata->getTableName()}`(`{$targetIdField['name']}`)\n";
+        $sql .= ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;\n";
+
+        return $sql;
+    }
+
+    /**
+     * Get primary key field information
+     */
+    private function getPrimaryKeyField($metadata): array
+    {
+        foreach ($metadata->getFieldMappings() as $fieldName => $mapping) {
+            if ($mapping->isPrimaryKey()) {
+                return [
+                    'name' => $mapping->getColumnName(),
+                    'type' => $mapping->getType()
+                ];
+            }
+        }
+
+        throw new \RuntimeException("No primary key found for entity: " . $metadata->getClassName());
+    }
+
+    /**
+     * Get junction table column name
+     */
+    private function getJunctionColumnName($joinTable, string $side, string $default): string
+    {
+        if (!$joinTable) {
+            return $default;
+        }
+
+        $columns = $side === 'join' ? $joinTable->getJoinColumns() : $joinTable->getInverseJoinColumns();
+
+        if (!empty($columns) && isset($columns[0])) {
+            $column = $columns[0];
+            return is_object($column) ? $column->getName() : $column['name'];
+        }
+
+        return $default;
+    }
+
+    /**
+     * Create a dummy field mapping for type conversion
+     */
+    private function createDummyFieldMapping(string $type): \Fduarte42\Aurum\Metadata\FieldMappingInterface
+    {
+        return new \Fduarte42\Aurum\Metadata\FieldMapping(
+            fieldName: 'dummy',
+            columnName: 'dummy',
+            type: $type,
+            nullable: false,
+            unique: false,
+            length: null,
+            precision: null,
+            scale: null,
+            default: null,
+            isIdentifier: false,
+            isGenerated: false,
+            generationStrategy: null
+        );
     }
 }

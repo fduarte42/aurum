@@ -29,7 +29,13 @@ class UnitOfWork implements UnitOfWorkInterface
 
     /** @var \SplObjectStorage<object, true> Entities scheduled for deletion */
     private \SplObjectStorage $entityDeletions;
-    
+
+    /** @var array<string, array> Many-to-Many associations scheduled for insertion */
+    private array $manyToManyInsertions = [];
+
+    /** @var array<string, array> Many-to-Many associations scheduled for deletion */
+    private array $manyToManyDeletions = [];
+
     private string $savepointName;
     private bool $savepointCreated = false;
 
@@ -213,10 +219,15 @@ class UnitOfWork implements UnitOfWorkInterface
                 $this->executeUpdate($entity);
             }
 
+            // Process Many-to-Many associations
+            $this->processManyToManyAssociations();
+
             // Clear scheduled operations
             $this->entityInsertions = new \SplObjectStorage();
             $this->entityUpdates = new \SplObjectStorage();
             $this->entityDeletions = new \SplObjectStorage();
+            $this->manyToManyInsertions = [];
+            $this->manyToManyDeletions = [];
             
         } catch (\Exception $e) {
             $this->rollbackToSavepoint();
@@ -542,8 +553,72 @@ class UnitOfWork implements UnitOfWorkInterface
                         $this->setInverseForeignKeyValue($entity, $relatedItem, $association);
                     }
                 }
+            } elseif ($association->getType() === 'ManyToMany') {
+                // For ManyToMany, persist all entities in the collection
+                if (is_array($relatedEntity) || $relatedEntity instanceof \Traversable) {
+                    foreach ($relatedEntity as $relatedItem) {
+                        if (!$this->contains($relatedItem)) {
+                            $this->persist($relatedItem);
+                        }
+                    }
+
+                    // Schedule Many-to-Many association updates
+                    $this->scheduleManyToManyUpdates($entity, $association, $relatedEntity);
+                }
             }
         }
+    }
+
+    /**
+     * Schedule Many-to-Many association updates
+     */
+    private function scheduleManyToManyUpdates(object $entity, \Fduarte42\Aurum\Metadata\AssociationMapping $association, $relatedEntities): void
+    {
+        if (!$association->isOwningSide()) {
+            return; // Only process owning side
+        }
+
+        $className = $this->proxyFactory->getRealClass($entity);
+        $metadata = $this->metadataFactory->getMetadataFor($className);
+        $entityId = $metadata->getIdentifierValue($entity);
+
+        $joinTable = $association->getJoinTable();
+        $tableName = $joinTable ? $joinTable->getName() : $this->generateJunctionTableName($metadata, $association);
+
+        $key = $tableName . '_' . $entityId . '_' . $association->getFieldName();
+
+        // Store current associations for comparison during flush
+        $currentAssociations = [];
+        if (is_array($relatedEntities) || $relatedEntities instanceof \Traversable) {
+            foreach ($relatedEntities as $relatedEntity) {
+                $relatedClassName = $this->proxyFactory->getRealClass($relatedEntity);
+                $relatedMetadata = $this->metadataFactory->getMetadataFor($relatedClassName);
+                $relatedId = $relatedMetadata->getIdentifierValue($relatedEntity);
+
+                $currentAssociations[] = [
+                    'entity' => $entity,
+                    'relatedEntity' => $relatedEntity,
+                    'entityId' => $entityId,
+                    'relatedId' => $relatedId,
+                    'tableName' => $tableName,
+                    'association' => $association
+                ];
+            }
+        }
+
+        $this->manyToManyInsertions[$key] = $currentAssociations;
+    }
+
+    /**
+     * Generate junction table name for Many-to-Many relationships
+     */
+    private function generateJunctionTableName(\Fduarte42\Aurum\Metadata\EntityMetadataInterface $metadata, \Fduarte42\Aurum\Metadata\AssociationMapping $association): string
+    {
+        $sourceTable = $metadata->getTableName();
+        $targetMetadata = $this->metadataFactory->getMetadataFor($association->getTargetEntity());
+        $targetTable = $targetMetadata->getTableName();
+
+        return $sourceTable . '_' . $targetTable;
     }
 
     /**
@@ -692,5 +767,92 @@ class UnitOfWork implements UnitOfWorkInterface
         $visiting->detach($entity);
         $visited->attach($entity);
         $sorted[] = $entity;
+    }
+
+    /**
+     * Process Many-to-Many associations
+     */
+    private function processManyToManyAssociations(): void
+    {
+        // Process Many-to-Many deletions first
+        foreach ($this->manyToManyDeletions as $associations) {
+            foreach ($associations as $association) {
+                $this->deleteManyToManyAssociation($association);
+            }
+        }
+
+        // Process Many-to-Many insertions
+        foreach ($this->manyToManyInsertions as $associations) {
+            foreach ($associations as $association) {
+                $this->insertManyToManyAssociation($association);
+            }
+        }
+    }
+
+    /**
+     * Insert a Many-to-Many association
+     */
+    private function insertManyToManyAssociation(array $association): void
+    {
+        $tableName = $association['tableName'];
+        $entityId = $association['entityId'];
+        $relatedId = $association['relatedId'];
+        $mapping = $association['association'];
+
+        $joinTable = $mapping->getJoinTable();
+
+        // Get column names
+        $sourceColumn = $this->getJunctionColumnName($joinTable, 'join', 'entity_id');
+        $targetColumn = $this->getJunctionColumnName($joinTable, 'inverse', 'related_id');
+
+        // Check if association already exists
+        $existsQuery = "SELECT COUNT(*) FROM {$tableName} WHERE {$sourceColumn} = ? AND {$targetColumn} = ?";
+        $exists = $this->connection->fetchOne($existsQuery, [$entityId, $relatedId]);
+
+        if (!$exists || $exists[0] == 0) {
+            // Insert the association
+            $insertQuery = "INSERT INTO {$tableName} ({$sourceColumn}, {$targetColumn}) VALUES (?, ?)";
+            $this->connection->execute($insertQuery, [$entityId, $relatedId]);
+        }
+    }
+
+    /**
+     * Delete a Many-to-Many association
+     */
+    private function deleteManyToManyAssociation(array $association): void
+    {
+        $tableName = $association['tableName'];
+        $entityId = $association['entityId'];
+        $relatedId = $association['relatedId'];
+        $mapping = $association['association'];
+
+        $joinTable = $mapping->getJoinTable();
+
+        // Get column names
+        $sourceColumn = $this->getJunctionColumnName($joinTable, 'join', 'entity_id');
+        $targetColumn = $this->getJunctionColumnName($joinTable, 'inverse', 'related_id');
+
+        // Delete the association
+        $deleteQuery = "DELETE FROM {$tableName} WHERE {$sourceColumn} = ? AND {$targetColumn} = ?";
+        $this->connection->execute($deleteQuery, [$entityId, $relatedId]);
+    }
+
+    /**
+     * Get junction table column name
+     */
+    private function getJunctionColumnName($joinTable, string $side, string $default): string
+    {
+        if (!$joinTable) {
+            return $default;
+        }
+
+        $columns = $side === 'join' ? $joinTable->getJoinColumns() : $joinTable->getInverseJoinColumns();
+
+        if (!empty($columns) && isset($columns[0])) {
+            $column = $columns[0];
+            return is_object($column) ? $column->getName() : $column['name'];
+        }
+
+        return $default;
     }
 }

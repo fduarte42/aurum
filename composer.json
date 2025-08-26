@@ -28,7 +28,8 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Fduarte42\\Aurum\\Tests\\": "tests/"
+            "Fduarte42\\Aurum\\Tests\\": "tests/",
+            "Examples\\": "examples/"
         }
     },
     "scripts": {
