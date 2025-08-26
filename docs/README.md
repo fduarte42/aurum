@@ -13,6 +13,7 @@ Welcome to the comprehensive documentation for Aurum ORM - a modern PHP ORM desi
 - **[QueryBuilder API](querybuilder-api.md)** - Complete API reference for the QueryBuilder with Many-to-Many support
 - **[CLI Tools Guide](cli-tools.md)** - Complete guide to the unified `aurum-cli.php` tool
 - **[Migration System](migrations.md)** - How to create, run, and manage database migrations
+- **[Tyoe System](type_system.md)** - Which types are available and how to use them
 
 ### Development
 - **[Testing Guide](testing.md)** - How to run tests, write new tests, and testing best practices
