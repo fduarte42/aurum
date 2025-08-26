@@ -58,4 +58,9 @@ class ORMException extends \Exception
     {
         return new self(sprintf('Query failed: %s. SQL: %s', $message, $sql));
     }
+
+    public static function unknownType(string $typeName): self
+    {
+        return new self(sprintf('Unknown type "%s".', $typeName));
+    }
 }

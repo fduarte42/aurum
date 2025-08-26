@@ -360,10 +360,10 @@ class RepositoryTest extends TestCase
             $this->todoRepository->save($todo2);
         });
 
-        // Test multiple criteria - use database values directly
+        // Test multiple criteria - use PHP values
         $todos = $this->todoRepository->findBy([
-            'completed' => 1,  // Use database value directly
-            'priority' => '5.00'  // Use exact decimal representation
+            'completed' => true,  // Use PHP boolean value
+            'priority' => BigDecimal::of('5.0')  // Use BigDecimal object
         ]);
 
         $this->assertCount(1, $todos);

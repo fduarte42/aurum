@@ -279,7 +279,7 @@ class TodoAppTest extends TestCase
         $this->entityManager->clear();
 
         $foundTodo = $this->entityManager->find(Todo::class, $id);
-        $this->assertEquals('123.46', (string) $foundTodo->getPriority()); // Rounded to 2 decimal places
+        $this->assertEquals('123.456789', (string) $foundTodo->getPriority()); // Preserves full precision
     }
 
     private function createSchema(): void

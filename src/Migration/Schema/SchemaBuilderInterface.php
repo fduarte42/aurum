@@ -37,7 +37,7 @@ interface SchemaBuilderInterface
     /**
      * Create an index
      */
-    public function createIndex(string $tableName, array $columns, string $indexName = null, array $options = []): void;
+    public function createIndex(string $tableName, array $columns, ?string $indexName = null, array $options = []): void;
 
     /**
      * Drop an index

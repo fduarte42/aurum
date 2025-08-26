@@ -85,12 +85,22 @@ class MigrationConfigurationTest extends TestCase
 
     public function testValidateDirectoryNotFound(): void
     {
-        $nonExistentDir = $this->tempDir . '/nonexistent';
+        // Use a path that cannot be created (e.g., under a read-only directory)
+        $readOnlyDir = $this->tempDir . '/readonly';
+        mkdir($readOnlyDir, 0444); // Read-only directory
+        $nonExistentDir = $readOnlyDir . '/nonexistent';
+
         $config = new MigrationConfiguration($nonExistentDir, 'TestMigrations');
 
         $this->expectException(MigrationException::class);
         $this->expectExceptionMessage('Migration directory not found');
-        $config->validate();
+
+        try {
+            $config->validate();
+        } finally {
+            // Clean up: make directory writable again for cleanup
+            chmod($readOnlyDir, 0755);
+        }
     }
 
     public function testValidateDirectoryNotWritable(): void

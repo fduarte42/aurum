@@ -10,6 +10,8 @@ use Fduarte42\Aurum\Metadata\MetadataFactory;
 use Fduarte42\Aurum\Proxy\LazyGhostProxyFactory;
 use Fduarte42\Aurum\Tests\Fixtures\Todo;
 use Fduarte42\Aurum\Tests\Fixtures\User;
+use Fduarte42\Aurum\Type\TypeRegistry;
+use Fduarte42\Aurum\Type\TypeInference;
 use Fduarte42\Aurum\UnitOfWork\UnitOfWork;
 use Brick\Math\BigDecimal;
 use PHPUnit\Framework\TestCase;
@@ -23,7 +25,12 @@ class UnitOfWorkTest extends TestCase
     protected function setUp(): void
     {
         $this->connection = ConnectionFactory::createSqliteConnection(':memory:');
-        $this->metadataFactory = new MetadataFactory();
+
+        // Set up type system
+        $typeRegistry = new TypeRegistry();
+        $typeInference = new TypeInference($typeRegistry);
+        $this->metadataFactory = new MetadataFactory($typeRegistry, $typeInference);
+
         $proxyFactory = new LazyGhostProxyFactory();
         
         $this->unitOfWork = new UnitOfWork(

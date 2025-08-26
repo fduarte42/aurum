@@ -63,7 +63,7 @@ abstract class AbstractSchemaBuilder implements SchemaBuilderInterface
     /**
      * {@inheritdoc}
      */
-    public function createIndex(string $tableName, array $columns, string $indexName = null, array $options = []): void
+    public function createIndex(string $tableName, array $columns, ?string $indexName = null, array $options = []): void
     {
         $indexName = $indexName ?: $this->generateIndexName($tableName, $columns);
         $unique = $options['unique'] ?? false;

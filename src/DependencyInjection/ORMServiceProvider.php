@@ -11,6 +11,8 @@ use Fduarte42\Aurum\EntityManagerInterface;
 use Fduarte42\Aurum\Metadata\MetadataFactory;
 use Fduarte42\Aurum\Proxy\LazyGhostProxyFactory;
 use Fduarte42\Aurum\Proxy\ProxyFactoryInterface;
+use Fduarte42\Aurum\Type\TypeRegistry;
+use Fduarte42\Aurum\Type\TypeInference;
 use Psr\Container\ContainerInterface;
 
 /**
@@ -27,13 +29,16 @@ class ORMServiceProvider implements ServiceProviderInterface
     {
         // Register connection
         $this->registerConnection($container);
-        
+
+        // Register type system
+        $this->registerTypeSystem($container);
+
         // Register metadata factory
         $this->registerMetadataFactory($container);
-        
+
         // Register proxy factory
         $this->registerProxyFactory($container);
-        
+
         // Register entity manager
         $this->registerEntityManager($container);
     }
@@ -42,6 +47,8 @@ class ORMServiceProvider implements ServiceProviderInterface
     {
         return [
             ConnectionInterface::class,
+            TypeRegistry::class,
+            TypeInference::class,
             MetadataFactory::class,
             ProxyFactoryInterface::class,
             EntityManagerInterface::class,
@@ -69,14 +76,46 @@ class ORMServiceProvider implements ServiceProviderInterface
         }
     }
 
+    private function registerTypeSystem(ContainerInterface $container): void
+    {
+        if ($container instanceof \DI\Container) {
+            $container->set(TypeRegistry::class, \DI\create(TypeRegistry::class));
+            $container->set(TypeInference::class, function (ContainerInterface $c) {
+                return new TypeInference($c->get(TypeRegistry::class));
+            });
+        } elseif (method_exists($container, 'bind')) {
+            $container->bind(TypeRegistry::class, TypeRegistry::class);
+            $container->bind(TypeInference::class, function ($c) {
+                return new TypeInference($c->make(TypeRegistry::class));
+            });
+        } elseif (method_exists($container, 'set')) {
+            $typeRegistry = new TypeRegistry();
+            $container->set(TypeRegistry::class, $typeRegistry);
+            $container->set(TypeInference::class, new TypeInference($typeRegistry));
+        }
+    }
+
     private function registerMetadataFactory(ContainerInterface $container): void
     {
         if ($container instanceof \DI\Container) {
-            $container->set(MetadataFactory::class, \DI\create(MetadataFactory::class));
+            $container->set(MetadataFactory::class, function (ContainerInterface $c) {
+                return new MetadataFactory(
+                    $c->get(TypeRegistry::class),
+                    $c->get(TypeInference::class)
+                );
+            });
         } elseif (method_exists($container, 'bind')) {
-            $container->bind(MetadataFactory::class, MetadataFactory::class);
+            $container->bind(MetadataFactory::class, function ($c) {
+                return new MetadataFactory(
+                    $c->make(TypeRegistry::class),
+                    $c->make(TypeInference::class)
+                );
+            });
         } elseif (method_exists($container, 'set')) {
-            $container->set(MetadataFactory::class, new MetadataFactory());
+            $container->set(MetadataFactory::class, new MetadataFactory(
+                $container->get(TypeRegistry::class),
+                $container->get(TypeInference::class)
+            ));
         }
     }
 

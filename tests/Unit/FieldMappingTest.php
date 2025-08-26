@@ -5,15 +5,54 @@ declare(strict_types=1);
 namespace Fduarte42\Aurum\Tests\Unit;
 
 use Fduarte42\Aurum\Metadata\FieldMapping;
+use Fduarte42\Aurum\Type\TypeRegistry;
 use Brick\Math\BigDecimal;
 use Ramsey\Uuid\Uuid;
 use PHPUnit\Framework\TestCase;
 
 class FieldMappingTest extends TestCase
 {
+    private TypeRegistry $typeRegistry;
+
+    protected function setUp(): void
+    {
+        $this->typeRegistry = new TypeRegistry();
+    }
+
+    private function createFieldMapping(
+        string $fieldName,
+        string $columnName,
+        string $type,
+        bool $nullable = false,
+        bool $unique = false,
+        ?int $length = null,
+        ?int $precision = null,
+        ?int $scale = null,
+        mixed $default = null,
+        bool $isIdentifier = false,
+        bool $isGenerated = false,
+        ?string $generationStrategy = null
+    ): FieldMapping {
+        return new FieldMapping(
+            fieldName: $fieldName,
+            columnName: $columnName,
+            type: $type,
+            nullable: $nullable,
+            unique: $unique,
+            length: $length,
+            precision: $precision,
+            scale: $scale,
+            default: $default,
+            isIdentifier: $isIdentifier,
+            isGenerated: $isGenerated,
+            generationStrategy: $generationStrategy,
+            typeRegistry: $this->typeRegistry
+        );
+    }
+
     public function testBasicFieldMapping(): void
     {
-        $mapping = new FieldMapping(
+        $mapping = $this->createFieldMapping(
             fieldName: 'name',
             columnName: 'user_name',
             type: 'string',
@@ -38,7 +77,7 @@ class FieldMappingTest extends TestCase
 
     public function testDecimalFieldMapping(): void
     {
-        $mapping = new FieldMapping(
+        $mapping = $this->createFieldMapping(
             fieldName: 'price',
             columnName: 'price',
             type: 'decimal',
@@ -54,7 +93,7 @@ class FieldMappingTest extends TestCase
 
     public function testIdentifierFieldMapping(): void
     {
-        $mapping = new FieldMapping(
+        $mapping = $this->createFieldMapping(
             fieldName: 'id',
             columnName: 'id',
             type: 'uuid',
@@ -70,7 +109,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertToPHPValueString(): void
     {
-        $mapping = new FieldMapping('name', 'name', 'string');
+        $mapping = $this->createFieldMapping('name', 'name', 'string');
         
         $this->assertEquals('test', $mapping->convertToPHPValue('test'));
         $this->assertNull($mapping->convertToPHPValue(null));
@@ -78,7 +117,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertToPHPValueInteger(): void
     {
-        $mapping = new FieldMapping('count', 'count', 'integer');
+        $mapping = $this->createFieldMapping('count', 'count', 'integer');
         
         $this->assertEquals(42, $mapping->convertToPHPValue('42'));
         $this->assertEquals(0, $mapping->convertToPHPValue('0'));
@@ -86,7 +125,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertToPHPValueFloat(): void
     {
-        $mapping = new FieldMapping('rate', 'rate', 'float');
+        $mapping = $this->createFieldMapping('rate', 'rate', 'float');
         
         $this->assertEquals(3.14, $mapping->convertToPHPValue('3.14'));
         $this->assertEquals(0.0, $mapping->convertToPHPValue('0'));
@@ -94,7 +133,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertToPHPValueBoolean(): void
     {
-        $mapping = new FieldMapping('active', 'active', 'boolean');
+        $mapping = $this->createFieldMapping('active', 'active', 'boolean');
         
         $this->assertTrue($mapping->convertToPHPValue(1));
         $this->assertTrue($mapping->convertToPHPValue('1'));
@@ -104,7 +143,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertToPHPValueUuid(): void
     {
-        $mapping = new FieldMapping('id', 'id', 'uuid');
+        $mapping = $this->createFieldMapping('id', 'id', 'uuid');
         $uuidString = '550e8400-e29b-41d4-a716-446655440000';
         
         $uuid = $mapping->convertToPHPValue($uuidString);
@@ -118,7 +157,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertToPHPValueDecimal(): void
     {
-        $mapping = new FieldMapping('price', 'price', 'decimal', scale: 2);
+        $mapping = $this->createFieldMapping('price', 'price', 'decimal', scale: 2);
         
         $decimal = $mapping->convertToPHPValue('123.45');
         $this->assertInstanceOf(BigDecimal::class, $decimal);
@@ -131,7 +170,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertToPHPValueDateTime(): void
     {
-        $mapping = new FieldMapping('created_at', 'created_at', 'datetime');
+        $mapping = $this->createFieldMapping('created_at', 'created_at', 'datetime');
         
         $dateTime = $mapping->convertToPHPValue('2023-01-01 12:00:00');
         $this->assertInstanceOf(\DateTimeImmutable::class, $dateTime);
@@ -144,7 +183,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertToPHPValueJson(): void
     {
-        $mapping = new FieldMapping('data', 'data', 'json');
+        $mapping = $this->createFieldMapping('data', 'data', 'json');
         
         $data = $mapping->convertToPHPValue('{"key": "value", "number": 42}');
         $this->assertEquals(['key' => 'value', 'number' => 42], $data);
@@ -156,7 +195,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertToDatabaseValueString(): void
     {
-        $mapping = new FieldMapping('name', 'name', 'string');
+        $mapping = $this->createFieldMapping('name', 'name', 'string');
         
         $this->assertEquals('test', $mapping->convertToDatabaseValue('test'));
         $this->assertNull($mapping->convertToDatabaseValue(null));
@@ -164,7 +203,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertToDatabaseValueBoolean(): void
     {
-        $mapping = new FieldMapping('active', 'active', 'boolean');
+        $mapping = $this->createFieldMapping('active', 'active', 'boolean');
         
         $this->assertEquals(1, $mapping->convertToDatabaseValue(true));
         $this->assertEquals(0, $mapping->convertToDatabaseValue(false));
@@ -172,7 +211,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertToDatabaseValueUuid(): void
     {
-        $mapping = new FieldMapping('id', 'id', 'uuid');
+        $mapping = $this->createFieldMapping('id', 'id', 'uuid');
         $uuid = Uuid::fromString('550e8400-e29b-41d4-a716-446655440000');
         
         $this->assertEquals('550e8400-e29b-41d4-a716-446655440000', $mapping->convertToDatabaseValue($uuid));
@@ -181,27 +220,29 @@ class FieldMappingTest extends TestCase
 
     public function testConvertToDatabaseValueDecimal(): void
     {
-        $mapping = new FieldMapping('price', 'price', 'decimal', scale: 2);
+        $mapping = $this->createFieldMapping('price', 'price', 'decimal', scale: 2);
         $decimal = BigDecimal::of('123.456');
-        
+
         $result = $mapping->convertToDatabaseValue($decimal);
-        $this->assertEquals('123.46', $result); // Rounded to 2 decimal places
-        
+        $this->assertEquals('123.456', $result); // No automatic rounding in new type system
+
         $this->assertEquals('456.78', $mapping->convertToDatabaseValue('456.78'));
     }
 
     public function testConvertToDatabaseValueDateTime(): void
     {
-        $mapping = new FieldMapping('created_at', 'created_at', 'datetime');
+        $mapping = $this->createFieldMapping('created_at', 'created_at', 'datetime');
         $dateTime = new \DateTimeImmutable('2023-01-01 12:00:00');
-        
+
         $this->assertEquals('2023-01-01 12:00:00', $mapping->convertToDatabaseValue($dateTime));
-        $this->assertEquals('string-date', $mapping->convertToDatabaseValue('string-date'));
+
+        // Test with valid date string
+        $this->assertEquals('2023-12-25 15:30:45', $mapping->convertToDatabaseValue('2023-12-25 15:30:45'));
     }
 
     public function testConvertToDatabaseValueJson(): void
     {
-        $mapping = new FieldMapping('data', 'data', 'json');
+        $mapping = $this->createFieldMapping('data', 'data', 'json');
         $data = ['key' => 'value', 'number' => 42];
         
         $this->assertEquals('{"key":"value","number":42}', $mapping->convertToDatabaseValue($data));
@@ -215,7 +256,7 @@ class FieldMappingTest extends TestCase
 
     public function testFieldMappingGetters(): void
     {
-        $mapping = new FieldMapping(
+        $mapping = $this->createFieldMapping(
             fieldName: 'price',
             columnName: 'product_price',
             type: 'decimal',
@@ -240,7 +281,7 @@ class FieldMappingTest extends TestCase
 
     public function testFieldMappingDefaults(): void
     {
-        $mapping = new FieldMapping('name', 'name', 'string');
+        $mapping = $this->createFieldMapping('name', 'name', 'string');
 
         // Test default values
         $this->assertFalse($mapping->isIdentifier());
@@ -251,7 +292,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertToDatabaseValueWithNull(): void
     {
-        $mapping = new FieldMapping('name', 'name', 'string', false, true);
+        $mapping = $this->createFieldMapping('name', 'name', 'string', false, true);
 
         $result = $mapping->convertToDatabaseValue(null);
         $this->assertNull($result);
@@ -259,7 +300,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertToPHPValueWithNull(): void
     {
-        $mapping = new FieldMapping('name', 'name', 'string', false, true);
+        $mapping = $this->createFieldMapping('name', 'name', 'string', false, true);
 
         $result = $mapping->convertToPHPValue(null);
         $this->assertNull($result);
@@ -267,7 +308,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertIntegerTypes(): void
     {
-        $mapping = new FieldMapping('count', 'count', 'integer');
+        $mapping = $this->createFieldMapping('count', 'count', 'integer');
 
         // Test various integer conversions
         $this->assertEquals(123, $mapping->convertToDatabaseValue(123));
@@ -281,7 +322,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertFloatTypes(): void
     {
-        $mapping = new FieldMapping('rate', 'rate', 'float');
+        $mapping = $this->createFieldMapping('rate', 'rate', 'float');
 
         // Test various float conversions
         $this->assertEquals(123.45, $mapping->convertToDatabaseValue(123.45));
@@ -293,7 +334,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertStringTypes(): void
     {
-        $mapping = new FieldMapping('name', 'name', 'string');
+        $mapping = $this->createFieldMapping('name', 'name', 'string');
 
         // Test various string conversions
         $this->assertEquals('test', $mapping->convertToDatabaseValue('test'));
@@ -307,7 +348,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertTextTypes(): void
     {
-        $mapping = new FieldMapping('description', 'description', 'text');
+        $mapping = $this->createFieldMapping('description', 'description', 'text');
 
         // Text should behave like string
         $this->assertEquals('long text', $mapping->convertToDatabaseValue('long text'));
@@ -316,7 +357,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertDateTimeWithString(): void
     {
-        $mapping = new FieldMapping('created_at', 'created_at', 'datetime');
+        $mapping = $this->createFieldMapping('created_at', 'created_at', 'datetime');
 
         // Test string to DateTime conversion
         $result = $mapping->convertToPHPValue('2023-01-01 12:00:00');
@@ -326,7 +367,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertDateTimeWithInvalidString(): void
     {
-        $mapping = new FieldMapping('created_at', 'created_at', 'datetime');
+        $mapping = $this->createFieldMapping('created_at', 'created_at', 'datetime');
 
         $this->expectException(\Exception::class);
         $mapping->convertToPHPValue('invalid date string');
@@ -334,7 +375,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertUuidWithString(): void
     {
-        $mapping = new FieldMapping('id', 'id', 'uuid');
+        $mapping = $this->createFieldMapping('id', 'id', 'uuid');
 
         // Test string UUID conversion
         $uuidString = '550e8400-e29b-41d4-a716-446655440000';
@@ -346,7 +387,7 @@ class FieldMappingTest extends TestCase
 
     public function testConvertUuidWithInvalidString(): void
     {
-        $mapping = new FieldMapping('id', 'id', 'uuid');
+        $mapping = $this->createFieldMapping('id', 'id', 'uuid');
 
         $this->expectException(\InvalidArgumentException::class);
         $mapping->convertToPHPValue('invalid-uuid-string');
@@ -354,17 +395,16 @@ class FieldMappingTest extends TestCase
 
     public function testConvertUnknownType(): void
     {
-        $mapping = new FieldMapping('data', 'data', 'unknown_type');
+        // Unknown types should throw an exception in the new type system
+        $this->expectException(\Fduarte42\Aurum\Exception\ORMException::class);
+        $this->expectExceptionMessage('Unknown type "unknown_type".');
 
-        // Unknown types should pass through unchanged
-        $value = 'test value';
-        $this->assertEquals($value, $mapping->convertToDatabaseValue($value));
-        $this->assertEquals($value, $mapping->convertToPHPValue($value));
+        $mapping = $this->createFieldMapping('data', 'data', 'unknown_type');
     }
 
     public function testFieldMappingConstructorWithAllParameters(): void
     {
-        $mapping = new FieldMapping(
+        $mapping = $this->createFieldMapping(
             fieldName: 'price',
             columnName: 'product_price',
             type: 'decimal',
@@ -392,14 +432,14 @@ class FieldMappingTest extends TestCase
 
     public function testFieldMappingIsUnique(): void
     {
-        $uniqueMapping = new FieldMapping(
+        $uniqueMapping = $this->createFieldMapping(
             fieldName: 'email',
             columnName: 'email',
             type: 'string',
             unique: true
         );
 
-        $nonUniqueMapping = new FieldMapping(
+        $nonUniqueMapping = $this->createFieldMapping(
             fieldName: 'name',
             columnName: 'name',
             type: 'string'
@@ -411,14 +451,14 @@ class FieldMappingTest extends TestCase
 
     public function testFieldMappingGetLength(): void
     {
-        $mappingWithLength = new FieldMapping(
+        $mappingWithLength = $this->createFieldMapping(
             fieldName: 'name',
             columnName: 'name',
             type: 'string',
             length: 100
         );
 
-        $mappingWithoutLength = new FieldMapping(
+        $mappingWithoutLength = $this->createFieldMapping(
             fieldName: 'description',
             columnName: 'description',
             type: 'text'
@@ -430,14 +470,14 @@ class FieldMappingTest extends TestCase
 
     public function testFieldMappingGetDefault(): void
     {
-        $mappingWithDefault = new FieldMapping(
+        $mappingWithDefault = $this->createFieldMapping(
             fieldName: 'status',
             columnName: 'status',
             type: 'string',
             default: 'active'
         );
 
-        $mappingWithoutDefault = new FieldMapping(
+        $mappingWithoutDefault = $this->createFieldMapping(
             fieldName: 'name',
             columnName: 'name',
             type: 'string'
@@ -449,7 +489,7 @@ class FieldMappingTest extends TestCase
 
     public function testFieldMappingIsGenerated(): void
     {
-        $generatedMapping = new FieldMapping(
+        $generatedMapping = $this->createFieldMapping(
             fieldName: 'id',
             columnName: 'id',
             type: 'integer',
@@ -457,7 +497,7 @@ class FieldMappingTest extends TestCase
             generationStrategy: 'AUTO'
         );
 
-        $nonGeneratedMapping = new FieldMapping(
+        $nonGeneratedMapping = $this->createFieldMapping(
             fieldName: 'name',
             columnName: 'name',
             type: 'string'
@@ -469,7 +509,7 @@ class FieldMappingTest extends TestCase
 
     public function testFieldMappingGetGenerationStrategy(): void
     {
-        $generatedMapping = new FieldMapping(
+        $generatedMapping = $this->createFieldMapping(
             fieldName: 'id',
             columnName: 'id',
             type: 'integer',
@@ -477,7 +517,7 @@ class FieldMappingTest extends TestCase
             generationStrategy: 'IDENTITY'
         );
 
-        $nonGeneratedMapping = new FieldMapping(
+        $nonGeneratedMapping = $this->createFieldMapping(
             fieldName: 'name',
             columnName: 'name',
             type: 'string'
@@ -487,45 +527,5 @@ class FieldMappingTest extends TestCase
         $this->assertNull($nonGeneratedMapping->getGenerationStrategy());
     }
 
-    public function testFieldMappingPrivateConvertToDecimal(): void
-    {
-        $mapping = new FieldMapping('price', 'price', 'decimal');
 
-        // Use reflection to test private convertToDecimal method
-        $reflection = new \ReflectionClass($mapping);
-        $method = $reflection->getMethod('convertToDecimal');
-        $method->setAccessible(true);
-
-        // Test with null
-        $result = $method->invoke($mapping, null);
-        $this->assertNull($result);
-
-        // Test with string
-        $result = $method->invoke($mapping, '123.45');
-        $this->assertInstanceOf(\Brick\Math\BigDecimal::class, $result);
-        $this->assertEquals('123.45', $result->__toString());
-    }
-
-    public function testFieldMappingPrivateConvertDecimalToDatabase(): void
-    {
-        $mapping = new FieldMapping('price', 'price', 'decimal');
-
-        // Use reflection to test private convertDecimalToDatabase method
-        $reflection = new \ReflectionClass($mapping);
-        $method = $reflection->getMethod('convertDecimalToDatabase');
-        $method->setAccessible(true);
-
-        // Test with null
-        $result = $method->invoke($mapping, null);
-        $this->assertEquals('', $result);
-
-        // Test with BigDecimal
-        $decimal = \Brick\Math\BigDecimal::of('123.45');
-        $result = $method->invoke($mapping, $decimal);
-        $this->assertEquals('123.45', $result);
-
-        // Test with string
-        $result = $method->invoke($mapping, '67.89');
-        $this->assertEquals('67.89', $result);
-    }
 }

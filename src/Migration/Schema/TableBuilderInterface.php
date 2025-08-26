@@ -82,12 +82,12 @@ interface TableBuilderInterface
     /**
      * Add an index
      */
-    public function index(array $columns, string $name = null, array $options = []): self;
+    public function index(array $columns, ?string $name = null, array $options = []): self;
 
     /**
      * Add a unique index
      */
-    public function unique(array $columns, string $name = null): self;
+    public function unique(array $columns, ?string $name = null): self;
 
     /**
      * Add a foreign key

@@ -7,6 +7,8 @@ namespace Fduarte42\Aurum\Tests\Unit;
 use Fduarte42\Aurum\Metadata\MetadataFactory;
 use Fduarte42\Aurum\Tests\Fixtures\Todo;
 use Fduarte42\Aurum\Tests\Fixtures\User;
+use Fduarte42\Aurum\Type\TypeRegistry;
+use Fduarte42\Aurum\Type\TypeInference;
 use PHPUnit\Framework\TestCase;
 
 class MetadataFactoryTest extends TestCase
@@ -15,7 +17,9 @@ class MetadataFactoryTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->metadataFactory = new MetadataFactory();
+        $typeRegistry = new TypeRegistry();
+        $typeInference = new TypeInference($typeRegistry);
+        $this->metadataFactory = new MetadataFactory($typeRegistry, $typeInference);
     }
 
     public function testGetMetadataForTodo(): void
@@ -491,11 +495,13 @@ class MetadataFactoryTest extends TestCase
     {
         $metadata = new \Fduarte42\Aurum\Metadata\EntityMetadata(User::class, 'users');
 
+        $typeRegistry = new TypeRegistry();
         $idMapping = new \Fduarte42\Aurum\Metadata\FieldMapping(
             fieldName: 'id',
             columnName: 'id',
             type: 'uuid',
-            isIdentifier: true
+            isIdentifier: true,
+            typeRegistry: $typeRegistry
         );
         $metadata->addFieldMapping($idMapping);
 
@@ -507,7 +513,8 @@ class MetadataFactoryTest extends TestCase
 
         // Verify identifier value was set
         $retrievedId = $metadata->getIdentifierValue($user);
-        $this->assertEquals($newId, $retrievedId);
+        $this->assertInstanceOf(\Ramsey\Uuid\UuidInterface::class, $retrievedId);
+        $this->assertEquals($newId, $retrievedId->toString());
     }
 
     public function testMetadataFactoryHasMetadata(): void

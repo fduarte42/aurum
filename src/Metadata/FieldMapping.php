@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace Fduarte42\Aurum\Metadata;
 
-use Brick\Math\BigDecimal;
-use Ramsey\Uuid\Uuid;
-use Ramsey\Uuid\UuidInterface;
+use Fduarte42\Aurum\Type\TypeInterface;
+use Fduarte42\Aurum\Type\TypeRegistry;
 
 /**
  * Field mapping implementation
  */
 class FieldMapping implements FieldMappingInterface
 {
+    private readonly TypeInterface $typeInstance;
+
     public function __construct(
         private readonly string $fieldName,
         private readonly string $columnName,
@@ -25,8 +26,10 @@ class FieldMapping implements FieldMappingInterface
         private readonly mixed $default = null,
         private readonly bool $isIdentifier = false,
         private readonly bool $isGenerated = false,
-        private readonly ?string $generationStrategy = null
+        private readonly ?string $generationStrategy = null,
+        private readonly ?TypeRegistry $typeRegistry = null
     ) {
+        $this->typeInstance = $this->typeRegistry?->getType($this->type) ?? $this->createFallbackType();
     }
 
     public function getFieldName(): string
@@ -91,86 +94,102 @@ class FieldMapping implements FieldMappingInterface
 
     public function convertToPHPValue(mixed $value): mixed
     {
-        if ($value === null) {
-            return null;
-        }
-
-        return match ($this->type) {
-            'uuid' => is_string($value) ? Uuid::fromString($value) : $value,
-            'decimal' => $this->convertToDecimal($value),
-            'integer' => (int) $value,
-            'float' => (float) $value,
-            'boolean' => (bool) $value,
-            'datetime' => is_string($value) ? new \DateTimeImmutable($value) : $value,
-            'date' => is_string($value) ? new \DateTimeImmutable($value) : $value,
-            'time' => is_string($value) ? new \DateTimeImmutable($value) : $value,
-            'json' => is_string($value) ? json_decode($value, true, 512, JSON_THROW_ON_ERROR) : $value,
-            default => $value,
-        };
+        return $this->typeInstance->convertToPHPValue($value);
     }
 
     public function convertToDatabaseValue(mixed $value): mixed
     {
-        if ($value === null) {
-            return null;
+        return $this->typeInstance->convertToDatabaseValue($value);
+    }
+
+    /**
+     * Get the type instance for this field
+     */
+    public function getTypeInstance(): TypeInterface
+    {
+        return $this->typeInstance;
+    }
+
+    /**
+     * Get SQL declaration for this field
+     */
+    public function getSQLDeclaration(): string
+    {
+        $options = [];
+
+        if ($this->length !== null) {
+            $options['length'] = $this->length;
         }
 
-        return match ($this->type) {
-            'uuid' => $value instanceof UuidInterface ? $value->toString() : (string) $value,
-            'decimal' => $this->convertDecimalToDatabase($value),
-            'boolean' => $value ? 1 : 0,
-            'datetime', 'date', 'time' => $value instanceof \DateTimeInterface ? $value->format('Y-m-d H:i:s') : $value,
-            'json' => is_array($value) || is_object($value) ? json_encode($value, JSON_THROW_ON_ERROR) : $value,
-            default => $value,
+        if ($this->precision !== null) {
+            $options['precision'] = $this->precision;
+        }
+
+        if ($this->scale !== null) {
+            $options['scale'] = $this->scale;
+        }
+
+        return $this->typeInstance->getSQLDeclaration($options);
+    }
+
+    /**
+     * Create a fallback type instance when TypeRegistry is not available
+     */
+    private function createFallbackType(): TypeInterface
+    {
+        // Create a simple fallback type that just passes values through
+        return new class($this->type) implements TypeInterface {
+            public function __construct(private readonly string $typeName) {}
+
+            public function getName(): string
+            {
+                return $this->typeName;
+            }
+
+            public function convertToPHPValue(mixed $value): mixed
+            {
+                return $value;
+            }
+
+            public function convertToDatabaseValue(mixed $value): mixed
+            {
+                return $value;
+            }
+
+            public function getSQLDeclaration(array $options = []): string
+            {
+                return 'TEXT';
+            }
+
+            public function requiresLength(): bool
+            {
+                return false;
+            }
+
+            public function supportsPrecisionScale(): bool
+            {
+                return false;
+            }
+
+            public function getDefaultLength(): ?int
+            {
+                return null;
+            }
+
+            public function getDefaultPrecision(): ?int
+            {
+                return null;
+            }
+
+            public function getDefaultScale(): ?int
+            {
+                return null;
+            }
+
+            public function isCompatibleWithPHPType(string $phpType): bool
+            {
+                return false;
+            }
         };
-    }
-
-    /**
-     * Convert value to decimal type (supports both ext-decimal and brick/math)
-     */
-    private function convertToDecimal(mixed $value): mixed
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        if (is_string($value) || is_numeric($value)) {
-            // Always use brick/math for consistency
-            return BigDecimal::of((string) $value);
-        }
-
-        // If it's already a BigDecimal, return as-is
-        if ($value instanceof BigDecimal) {
-            return $value;
-        }
-
-        // If it's a Decimal object (from ext-decimal), convert to BigDecimal
-        if ($value instanceof \Decimal\Decimal) {
-            return BigDecimal::of($value->toString());
-        }
-
-        return $value;
-    }
-
-    /**
-     * Convert decimal value to database format
-     */
-    private function convertDecimalToDatabase(mixed $value): string
-    {
-        if ($value === null) {
-            return '';
-        }
-
-        // Handle ext-decimal
-        if ($value instanceof \Decimal\Decimal) {
-            return $value->toString();
-        }
-
-        // Handle brick/math
-        if ($value instanceof BigDecimal) {
-            return (string) $value->toScale($this->scale ?? 2, \Brick\Math\RoundingMode::HALF_UP);
-        }
-
-        return (string) $value;
     }
 }

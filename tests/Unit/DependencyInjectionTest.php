@@ -294,11 +294,15 @@ class DependencyInjectionTest extends TestCase
         $provider = new ORMServiceProvider($config);
         $container = new SimpleContainer();
 
-        // Use reflection to test private registerMetadataFactory method
+        // First register the type system (dependency of metadata factory)
         $reflection = new \ReflectionClass($provider);
+        $typeSystemMethod = $reflection->getMethod('registerTypeSystem');
+        $typeSystemMethod->setAccessible(true);
+        $typeSystemMethod->invoke($provider, $container);
+
+        // Then register metadata factory
         $method = $reflection->getMethod('registerMetadataFactory');
         $method->setAccessible(true);
-
         $method->invoke($provider, $container);
 
         $this->assertTrue($container->has(MetadataFactory::class));
@@ -338,6 +342,10 @@ class DependencyInjectionTest extends TestCase
         $registerConnection = $reflection->getMethod('registerConnection');
         $registerConnection->setAccessible(true);
         $registerConnection->invoke($provider, $container);
+
+        $registerTypeSystem = $reflection->getMethod('registerTypeSystem');
+        $registerTypeSystem->setAccessible(true);
+        $registerTypeSystem->invoke($provider, $container);
 
         $registerMetadata = $reflection->getMethod('registerMetadataFactory');
         $registerMetadata->setAccessible(true);
@@ -488,6 +496,10 @@ class DependencyInjectionTest extends TestCase
         $registerConnection = $reflection->getMethod('registerConnection');
         $registerConnection->setAccessible(true);
         $registerConnection->invoke($provider, $container);
+
+        $registerTypeSystem = $reflection->getMethod('registerTypeSystem');
+        $registerTypeSystem->setAccessible(true);
+        $registerTypeSystem->invoke($provider, $container);
 
         $registerMetadata = $reflection->getMethod('registerMetadataFactory');
         $registerMetadata->setAccessible(true);
@@ -646,8 +658,13 @@ class DependencyInjectionTest extends TestCase
         $provider = new ORMServiceProvider();
         $container = new ContainerBuilder(); // This extends DI\Container
 
-        // Use reflection to test private registerMetadataFactory method
+        // First register the type system (dependency of metadata factory)
         $reflection = new \ReflectionClass($provider);
+        $typeSystemMethod = $reflection->getMethod('registerTypeSystem');
+        $typeSystemMethod->setAccessible(true);
+        $typeSystemMethod->invoke($provider, $container);
+
+        // Then register metadata factory
         $method = $reflection->getMethod('registerMetadataFactory');
         $method->setAccessible(true);
         $method->invoke($provider, $container);
@@ -687,6 +704,10 @@ class DependencyInjectionTest extends TestCase
         $registerConnection = $reflection->getMethod('registerConnection');
         $registerConnection->setAccessible(true);
         $registerConnection->invoke($provider, $container);
+
+        $registerTypeSystem = $reflection->getMethod('registerTypeSystem');
+        $registerTypeSystem->setAccessible(true);
+        $registerTypeSystem->invoke($provider, $container);
 
         $registerMetadata = $reflection->getMethod('registerMetadataFactory');
         $registerMetadata->setAccessible(true);
@@ -744,7 +765,7 @@ class DependencyInjectionTest extends TestCase
         $services = $provider->getProvidedServices();
 
         $this->assertIsArray($services);
-        $this->assertCount(5, $services);
+        $this->assertCount(7, $services);
         $this->assertContains(ConnectionInterface::class, $services);
         $this->assertContains(MetadataFactory::class, $services);
         $this->assertContains(ProxyFactoryInterface::class, $services);
@@ -884,6 +905,10 @@ class DependencyInjectionTest extends TestCase
         $registerConnection->setAccessible(true);
         $registerConnection->invoke($provider, $container);
 
+        $registerTypeSystem = $reflection->getMethod('registerTypeSystem');
+        $registerTypeSystem->setAccessible(true);
+        $registerTypeSystem->invoke($provider, $container);
+
         $registerMetadata = $reflection->getMethod('registerMetadataFactory');
         $registerMetadata->setAccessible(true);
         $registerMetadata->invoke($provider, $container);
@@ -912,7 +937,7 @@ class DependencyInjectionTest extends TestCase
 
         // Test that getProvidedServices works with empty config
         $services = $provider->getProvidedServices();
-        $this->assertCount(5, $services);
+        $this->assertCount(7, $services);
     }
 
     public function testORMServiceProviderConstructorWithNullConfig(): void
@@ -924,6 +949,6 @@ class DependencyInjectionTest extends TestCase
         // Test that getProvidedServices works
         $services = $provider->getProvidedServices();
         $this->assertIsArray($services);
-        $this->assertCount(5, $services);
+        $this->assertCount(7, $services);
     }
 }

@@ -161,7 +161,7 @@ abstract class AbstractTableBuilder implements TableBuilderInterface
     /**
      * {@inheritdoc}
      */
-    public function index(array $columns, string $name = null, array $options = []): self
+    public function index(array $columns, ?string $name = null, array $options = []): self
     {
         $name = $name ?: $this->generateIndexName($columns);
         $this->indexes[$name] = [
@@ -174,7 +174,7 @@ abstract class AbstractTableBuilder implements TableBuilderInterface
     /**
      * {@inheritdoc}
      */
-    public function unique(array $columns, string $name = null): self
+    public function unique(array $columns, ?string $name = null): self
     {
         return $this->index($columns, $name, ['unique' => true]);
     }

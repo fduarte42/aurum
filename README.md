@@ -2,8 +2,10 @@
 
 A modern PHP 8.4+ database abstraction layer inspired by Doctrine ORM, featuring:
 
+- **Advanced Type System** with automatic type inference from PHP property types
+- **Multiple Decimal Implementations** (BigDecimal, ext-decimal, string-based)
+- **Specialized Date/Time Types** (date, time, datetime, timezone-aware datetime)
 - **Native UUID support** with time-based UUID generation
-- **Decimal type support** using PHP's Decimal extension
 - **LazyGhost proxy objects** for lazy loading
 - **Multiple UnitOfWork support** with savepoint-based transactions
 - **SQL-based query builder** with DQL-like join capabilities
@@ -23,7 +25,8 @@ composer require fduarte42/aurum
 - ext-pdo
 - ext-pdo_sqlite
 - ext-pdo_mysql
-- ext-decimal
+- ext-decimal (optional, for Decimal type support)
+- brick/math (for BigDecimal support)
 
 ## Quick Start
 
@@ -142,6 +145,105 @@ $userRepo = $entityManager->getRepository(User::class);
 $allUsers = $userRepo->findAll();
 $activeUsers = $userRepo->findBy(['active' => true]);
 ```
+
+## Advanced Type System
+
+Aurum features a sophisticated type system with automatic type inference and multiple implementations for common data types.
+
+### Automatic Type Inference
+
+The ORM can automatically infer types from PHP property type hints, reducing the need for explicit type declarations:
+
+```php
+<?php
+
+#[Entity(table: 'products')]
+class Product
+{
+    #[Id]
+    #[Column] // Type inferred as 'uuid' from UuidInterface
+    private ?UuidInterface $id = null;
+
+    #[Column] // Type inferred as 'string' with length 255
+    private string $name;
+
+    #[Column] // Type inferred as 'decimal' from BigDecimal
+    private BigDecimal $price;
+
+    #[Column] // Type inferred as 'integer'
+    private int $stock;
+
+    #[Column] // Type inferred as 'boolean'
+    private bool $active = true;
+
+    #[Column] // Type inferred as 'datetime'
+    private \DateTimeImmutable $createdAt;
+}
+```
+
+### Multiple Decimal Implementations
+
+Choose the decimal implementation that best fits your needs:
+
+```php
+<?php
+
+#[Entity(table: 'financial_data')]
+class FinancialData
+{
+    #[Column(type: 'decimal', precision: 15, scale: 4)]
+    private BigDecimal $amount; // Using brick/math
+
+    #[Column(type: 'decimal_ext', precision: 10, scale: 2)]
+    private Decimal $tax; // Using ext-decimal
+
+    #[Column(type: 'decimal_string', precision: 8, scale: 3)]
+    private string $commission; // String-based for maximum precision
+}
+```
+
+### Specialized Date/Time Types
+
+Different date/time types for different use cases:
+
+```php
+<?php
+
+#[Entity(table: 'events')]
+class Event
+{
+    #[Column(type: 'date')] // Date only (Y-m-d)
+    private \DateTimeImmutable $eventDate;
+
+    #[Column(type: 'time')] // Time only (H:i:s)
+    private \DateTimeImmutable $startTime;
+
+    #[Column(type: 'datetime')] // Standard datetime
+    private \DateTimeImmutable $createdAt;
+
+    #[Column(type: 'datetime_tz')] // Timezone-aware (stored as JSON)
+    private \DateTimeImmutable $scheduledAt;
+}
+```
+
+### Supported Types
+
+| Type | PHP Type | Database Storage | Description |
+|------|----------|------------------|-------------|
+| `string` | `string` | VARCHAR/TEXT | Variable length strings |
+| `text` | `string` | TEXT | Large text content |
+| `integer` | `int` | INTEGER | Whole numbers |
+| `float` | `float` | REAL/DOUBLE | Floating point numbers |
+| `boolean` | `bool` | INTEGER/TINYINT | Boolean values |
+| `json` | `array` | JSON/TEXT | JSON data |
+| `uuid` | `UuidInterface` | CHAR(36)/TEXT | UUID values |
+| `decimal` | `BigDecimal` | DECIMAL/TEXT | High precision decimals (brick/math) |
+| `decimal_ext` | `Decimal` | DECIMAL/TEXT | High precision decimals (ext-decimal) |
+| `decimal_string` | `string` | DECIMAL/TEXT | String-based decimals |
+| `date` | `DateTimeInterface` | DATE/TEXT | Date only |
+| `time` | `DateTimeInterface` | TIME/TEXT | Time only |
+| `datetime` | `DateTimeInterface` | DATETIME/TEXT | Date and time |
+| `datetime_tz` | `DateTimeInterface` | JSON/TEXT | Timezone-aware datetime |
 
 ## Advanced Features
 

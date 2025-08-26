@@ -10,6 +10,8 @@ use Fduarte42\Aurum\Attribute\Id;
 use Fduarte42\Aurum\Attribute\ManyToOne;
 use Fduarte42\Aurum\Attribute\OneToMany;
 use Fduarte42\Aurum\Exception\ORMException;
+use Fduarte42\Aurum\Type\TypeRegistry;
+use Fduarte42\Aurum\Type\TypeInference;
 use ReflectionClass;
 use ReflectionProperty;
 
@@ -20,6 +22,12 @@ class MetadataFactory
 {
     /** @var array<string, EntityMetadataInterface> */
     private array $metadataCache = [];
+
+    public function __construct(
+        private readonly ?TypeRegistry $typeRegistry = null,
+        private readonly ?TypeInference $typeInference = null
+    ) {
+    }
 
     /**
      * Get metadata for an entity class
@@ -66,36 +74,101 @@ class MetadataFactory
         return $metadata;
     }
 
+    private function hasAssociationAttribute(ReflectionProperty $property): bool
+    {
+        return !empty($property->getAttributes(ManyToOne::class)) ||
+               !empty($property->getAttributes(OneToMany::class));
+    }
+
     private function processProperty(EntityMetadata $metadata, ReflectionProperty $property): void
     {
         $fieldName = $property->getName();
-        
+
         // Check for Id attribute
         $idAttributes = $property->getAttributes(Id::class);
         $isIdentifier = !empty($idAttributes);
         $generationStrategy = $isIdentifier ? $idAttributes[0]->newInstance()->strategy : null;
-        
+
+        // Skip properties that have association attributes (unless they're also columns)
+        if (!$isIdentifier && $this->hasAssociationAttribute($property) && empty($property->getAttributes(Column::class))) {
+            // Process associations but don't create field mappings
+            $this->processAssociations($metadata, $property);
+            return;
+        }
+
         // Check for Column attribute
         $columnAttributes = $property->getAttributes(Column::class);
         if (!empty($columnAttributes)) {
             $columnAttribute = $columnAttributes[0]->newInstance();
-            
+
+            // Determine the type - use explicit type or infer from property
+            $type = $columnAttribute->type;
+            $length = $columnAttribute->length;
+            $precision = $columnAttribute->precision;
+            $scale = $columnAttribute->scale;
+
+            // If type is not explicitly set or is 'string' (default) and we have type inference, try to infer
+            if (($type === 'string' || $type === null) && $this->typeInference !== null) {
+                $inferredType = $this->typeInference->inferFromProperty($property);
+                if ($inferredType !== null) {
+                    $type = $inferredType;
+
+                    // Get inferred options if not explicitly set
+                    $inferredOptions = $this->typeInference->inferTypeOptions($property, $type);
+                    $length = $length ?? $inferredOptions['length'] ?? null;
+                    $precision = $precision ?? $inferredOptions['precision'] ?? null;
+                    $scale = $scale ?? $inferredOptions['scale'] ?? null;
+                }
+            }
+
+            // Fallback to string if type is still null
+            if ($type === null) {
+                $type = 'string';
+            }
+
             $fieldMapping = new FieldMapping(
                 fieldName: $fieldName,
                 columnName: $columnAttribute->name ?? $this->getColumnNameFromFieldName($fieldName),
-                type: $columnAttribute->type,
+                type: $type,
                 nullable: $columnAttribute->nullable,
                 unique: $columnAttribute->unique,
-                length: $columnAttribute->length,
-                precision: $columnAttribute->precision,
-                scale: $columnAttribute->scale,
+                length: $length,
+                precision: $precision,
+                scale: $scale,
                 default: $columnAttribute->default,
                 isIdentifier: $isIdentifier,
                 isGenerated: $isIdentifier,
-                generationStrategy: $generationStrategy
+                generationStrategy: $generationStrategy,
+                typeRegistry: $this->typeRegistry
             );
-            
+
             $metadata->addFieldMapping($fieldMapping);
+        } elseif ($this->typeInference !== null && !$this->hasAssociationAttribute($property)) {
+            // No Column attribute but we have type inference - try to create a mapping
+            // Only for properties that are not associations
+            $inferredType = $this->typeInference->inferFromProperty($property);
+            if ($inferredType !== null) {
+                $inferredOptions = $this->typeInference->inferTypeOptions($property, $inferredType);
+
+                $fieldMapping = new FieldMapping(
+                    fieldName: $fieldName,
+                    columnName: $this->getColumnNameFromFieldName($fieldName),
+                    type: $inferredType,
+                    nullable: $property->getType()?->allowsNull() ?? false,
+                    unique: false,
+                    length: $inferredOptions['length'] ?? null,
+                    precision: $inferredOptions['precision'] ?? null,
+                    scale: $inferredOptions['scale'] ?? null,
+                    default: null,
+                    isIdentifier: $isIdentifier,
+                    isGenerated: $isIdentifier,
+                    generationStrategy: $generationStrategy,
+                    typeRegistry: $this->typeRegistry
+                );
+
+                $metadata->addFieldMapping($fieldMapping);
+            }
+            // Don't create fallback string mappings for properties without explicit Column attributes
         }
         
         // Check for association attributes
