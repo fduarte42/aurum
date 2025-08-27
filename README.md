@@ -377,22 +377,22 @@ class Event
 
 ### Supported Types
 
-| Type | PHP Type | Database Storage                                                    | Description |
-|------|----------|---------------------------------------------------------------------|-------------|
-| `string` | `string` | VARCHAR/TEXT                                                        | Variable length strings |
-| `text` | `string` | TEXT                                                                | Large text content |
-| `integer` | `int` | INTEGER                                                             | Whole numbers |
-| `float` | `float` | REAL/DOUBLE                                                         | Floating point numbers |
-| `boolean` | `bool` | INTEGER/TINYINT                                                     | Boolean values |
-| `json` | `array` | JSON/TEXT                                                           | JSON data |
-| `uuid` | `UuidInterface` | CHAR(36)/TEXT                                                       | UUID values |
-| `decimal` | `BigDecimal` | DECIMAL/TEXT                                                        | High precision decimals (brick/math) |
-| `decimal_ext` | `Decimal` | DECIMAL/TEXT                                                        | High precision decimals (ext-decimal) |
-| `decimal_string` | `string` | DECIMAL/TEXT                                                        | String-based decimals |
-| `date` | `DateTimeInterface` | DATE/TEXT                                                           | Date only |
-| `time` | `DateTimeInterface` | TIME/TEXT                                                           | Time only |
-| `datetime` | `DateTimeInterface` | DATETIME/TEXT                                                       | Date and time |
-| `datetime_tz` | `DateTimeInterface` | 3 columns<br>(utc: DATETIME, local: DATETIME, timezone: VARCHAR(50) | Timezone-aware datetime |
+| Type | PHP Type | Database Storage                                                       | Description |
+|------|----------|------------------------------------------------------------------------|-------------|
+| `string` | `string` | VARCHAR/TEXT                                                           | Variable length strings |
+| `text` | `string` | TEXT                                                                   | Large text content |
+| `integer` | `int` | INTEGER                                                                | Whole numbers |
+| `float` | `float` | REAL/DOUBLE                                                            | Floating point numbers |
+| `boolean` | `bool` | INTEGER/TINYINT                                                        | Boolean values |
+| `json` | `array` | JSON/TEXT                                                              | JSON data |
+| `uuid` | `UuidInterface` | CHAR(36)/TEXT                                                          | UUID values |
+| `decimal` | `BigDecimal` | DECIMAL/TEXT                                                           | High precision decimals (brick/math) |
+| `decimal_ext` | `Decimal` | DECIMAL/TEXT                                                           | High precision decimals (ext-decimal) |
+| `decimal_string` | `string` | DECIMAL/TEXT                                                           | String-based decimals |
+| `date` | `DateTimeInterface` | DATE/TEXT                                                              | Date only |
+| `time` | `DateTimeInterface` | TIME/TEXT                                                              | Time only |
+| `datetime` | `DateTimeInterface` | DATETIME/TEXT                                                          | Date and time |
+| `datetime_tz` | `DateTimeInterface` | utc: DATETIME<br>local: DATETIME<br>timezone: VARCHAR(50) | Timezone-aware datetime |
 
 ## Advanced Features
 
