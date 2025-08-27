@@ -12,9 +12,9 @@ interface QueryBuilderInterface
     /**
      * Add a SELECT clause
      *
-     * @param string|array<string> $select
+     * @param string|array<string> ...$select
      */
-    public function select(string|array $select): self;
+    public function select(string|array ...$select): self;
 
     /**
      * Add additional SELECT fields
@@ -141,11 +141,11 @@ interface QueryBuilderInterface
     public function getParameters(): array;
 
     /**
-     * Execute the query and return results
+     * Execute the query and return results as a PDOStatement iterator
      *
-     * @return array<int, array<string, mixed>>
+     * @return \PDOStatement
      */
-    public function getResult(): array;
+    public function getResult(): \PDOStatement;
 
     /**
      * Execute the query and return one result

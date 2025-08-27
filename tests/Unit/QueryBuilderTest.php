@@ -277,11 +277,20 @@ class QueryBuilderTest extends TestCase
         $connection->execute('INSERT INTO test_table VALUES (1, "test1")');
         $connection->execute('INSERT INTO test_table VALUES (2, "test2")');
 
-        $results = $this->queryBuilder
+        $statement = $this->queryBuilder
             ->select('*')
             ->from('test_table', 't')
             ->orderBy('t.id')
             ->getResult();
+
+        // Test that we get a PDOStatement
+        $this->assertInstanceOf(\PDOStatement::class, $statement);
+
+        // Test iteration over the statement (fetch mode already set to ASSOC)
+        $results = [];
+        foreach ($statement as $row) {
+            $results[] = $row;
+        }
 
         $this->assertCount(2, $results);
         $this->assertEquals(['id' => 1, 'name' => 'test1'], $results[0]);
@@ -450,5 +459,31 @@ class QueryBuilderTest extends TestCase
         $this->assertStringContainsString('OR', $sql);
         $this->assertStringContainsString('COUNT(*) > 5', $sql);
         $this->assertStringContainsString('AVG(u.salary) > 50000', $sql);
+    }
+
+    public function testSelectWithMultipleArguments(): void
+    {
+        $sql = $this->queryBuilder
+            ->select('id', 'name', 'email')
+            ->from('users', 'u')
+            ->getSQL();
+
+        $this->assertEquals(
+            'SELECT id, name, email FROM "users" "u"',
+            $sql
+        );
+    }
+
+    public function testSelectWithArrayAndMultipleArguments(): void
+    {
+        $sql = $this->queryBuilder
+            ->select(['id', 'name'], 'email', 'COUNT(*)')
+            ->from('users', 'u')
+            ->getSQL();
+
+        $this->assertEquals(
+            'SELECT id, name, email, COUNT(*) FROM "users" "u"',
+            $sql
+        );
     }
 }

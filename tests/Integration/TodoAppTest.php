@@ -183,7 +183,11 @@ class TodoAppTest extends TestCase
             ->setParameter('email', 'test@example.com')
             ->setParameter('minPriority', '5.00');
 
-        $results = $qb->getResult();
+        $statement = $qb->getResult();
+        $results = [];
+        foreach ($statement as $row) {
+            $results[] = $row;
+        }
         $this->assertCount(1, $results);
         $this->assertEquals('High Priority', $results[0]['title']);
     }

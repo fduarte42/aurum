@@ -174,7 +174,11 @@ $qb = $taskRepo->createQueryBuilder('t')
     ->setParameter('categoryName', 'Development')
     ->setParameter('minHours', 4.0);
 
-$results = $qb->getResult();
+$statement = $qb->getResult();
+$results = [];
+foreach ($statement as $row) {
+    $results[] = $row;
+}
 echo "   ✅ Auto-join resolved: 'category' → 't.category_id = c.id'\n";
 echo "   ✅ Found " . count($results) . " tasks in Development category with >4 hours\n";
 if (!empty($results)) {

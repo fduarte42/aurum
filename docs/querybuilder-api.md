@@ -123,16 +123,22 @@ $qb->from(User::class, 'u')->innerJoin('u.roles', 'r');
 
 ## Query Execution Methods
 
-### `getResult(): array`
+### `getResult(): \PDOStatement`
 
-Execute the query and return all results as an array of entities.
+Execute the query and return a PDOStatement iterator for efficient iteration over database results without loading all records into memory at once. The fetch mode is automatically set to `PDO::FETCH_ASSOC`.
 
 ```php
-$users = $qb->from(User::class, 'u')
-            ->innerJoin('u.roles', 'r')
-            ->where('r.name = :role')
-            ->setParameter('role', 'admin')
-            ->getResult();
+$statement = $qb->from(User::class, 'u')
+                ->innerJoin('u.roles', 'r')
+                ->where('r.name = :role')
+                ->setParameter('role', 'admin')
+                ->getResult();
+
+// Iterate efficiently over results (fetch mode already set to ASSOC)
+foreach ($statement as $row) {
+    // Process each row without loading all into memory
+    echo "User: {$row['name']}\n";
+}
 ```
 
 ### `getOneOrNullResult(): ?object`

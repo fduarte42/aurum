@@ -35,9 +35,16 @@ class QueryBuilder implements QueryBuilderInterface
         $this->metadataFactory = $metadataFactory;
     }
 
-    public function select(string|array $select): self
+    public function select(string|array ...$select): self
     {
-        $this->select = is_array($select) ? $select : [$select];
+        $this->select = [];
+        foreach ($select as $field) {
+            if (is_array($field)) {
+                $this->select = array_merge($this->select, $field);
+            } else {
+                $this->select[] = $field;
+            }
+        }
         return $this;
     }
 
@@ -296,10 +303,12 @@ class QueryBuilder implements QueryBuilderInterface
         return $this->connection;
     }
 
-    public function getResult(): array
+    public function getResult(): \PDOStatement
     {
         $sql = $this->getSQL();
-        return $this->connection->fetchAll($sql, $this->parameters);
+        $statement = $this->connection->execute($sql, $this->parameters);
+        $statement->setFetchMode(\PDO::FETCH_ASSOC);
+        return $statement;
     }
 
     public function getOneOrNullResult(): ?array

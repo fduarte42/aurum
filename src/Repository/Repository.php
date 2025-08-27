@@ -309,14 +309,14 @@ class Repository implements RepositoryInterface
     /**
      * Hydrate database results into entities
      */
-    private function hydrateResults(array $results): array
+    private function hydrateResults(array|\PDOStatement $results): array
     {
         $entities = [];
-        
+
         foreach ($results as $result) {
             $entities[] = $this->hydrateEntity($result);
         }
-        
+
         return $entities;
     }
 
