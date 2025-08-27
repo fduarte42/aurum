@@ -181,7 +181,7 @@ use Fduarte42\Aurum\DependencyInjection\ContainerBuilder;
 $config = [
     'connection' => [
         'driver' => 'sqlite',
-        'path' => 'app.db'
+        'path' => ':memory:'
     ]
 ];
 
@@ -263,7 +263,7 @@ php bin/aurum-cli.php migration diff --name="AutoDiscoveredChanges"
 
 ### Configuration
 
-Create an `aurum.config.php` file in your project root:
+Create an `aurum.config.php` file in your project root (see `examples/aurum.config.php` for a template):
 
 ```php
 <?php
@@ -271,7 +271,7 @@ Create an `aurum.config.php` file in your project root:
 return [
     'connection' => [
         'driver' => 'sqlite',
-        'path' => 'app.db'
+        'path' => ':memory:'
     ],
     'migrations' => [
         'directory' => __DIR__ . '/migrations',
@@ -609,7 +609,7 @@ use Fduarte42\Aurum\Migration\MigrationService;
 $config = [
     'connection' => [
         'driver' => 'sqlite',
-        'path' => 'app.db'
+        'path' => ':memory:'
     ],
     'migrations' => [
         'directory' => __DIR__ . '/migrations',

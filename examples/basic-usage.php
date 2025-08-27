@@ -121,7 +121,7 @@ echo "=== Basic ORM Usage Example ===\n\n";
 // Create entities
 $category = new Category('Development');
 $task1 = new Task('Implement user authentication', BigDecimal::of('8.50'));
-$task1->setDescription('Add login/logout functionality with JWT tokens');
+$task1->description = 'Add login/logout functionality with JWT tokens';
 $task2 = new Task('Write unit tests', BigDecimal::of('4.00'));
 
 $category->addTask($task1);
@@ -141,15 +141,15 @@ $entityManager->persist($task2);
 $entityManager->flush();
 $entityManager->commit();
 
-echo "   ✅ Auto-persisted category: {$category->getName()}\n";
-echo "   ✅ Auto-persisted task: {$task1->getTitle()} ({$task1->getEstimatedHours()} hours)\n";
-echo "   ✅ Auto-persisted task: {$task2->getTitle()} ({$task2->getEstimatedHours()} hours)\n";
+echo "   ✅ Auto-persisted category: {$category->name}\n";
+echo "   ✅ Auto-persisted task: {$task1->title} ({$task1->estimatedHours} hours)\n";
+echo "   ✅ Auto-persisted task: {$task2->title} ({$task2->estimatedHours} hours)\n";
 echo "   ✅ Foreign keys automatically managed!\n\n";
 
 // Find entities
 echo "2. Finding entities...\n";
-$foundCategory = $entityManager->find(Category::class, $category->getId());
-echo "   ✓ Found category by ID: {$foundCategory->getName()}\n";
+$foundCategory = $entityManager->find(Category::class, $category->id);
+echo "   ✓ Found category by ID: {$foundCategory->name}\n";
 
 $taskRepo = $entityManager->getRepository(Task::class);
 $allTasks = $taskRepo->findAll();

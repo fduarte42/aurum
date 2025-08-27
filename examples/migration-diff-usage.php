@@ -109,7 +109,7 @@ class UserV2
 $config = [
     'connection' => [
         'driver' => 'sqlite',
-        'path' => 'example_migration_diff.db' // Use a real file so we can persist data
+        'path' => ':memory:' // Use in-memory database
     ]
 ];
 
@@ -242,23 +242,10 @@ try {
     echo "  - Column 'name' needs to be renamed to 'firstName' and resized\n";
     echo "  - New columns: 'lastName', 'bio', 'active', 'lastLoginAt'\n";
     echo "  - All changes are handled with proper SchemaBuilder syntax\n\n";
-    
-    // Clean up
-    echo "🧹 Cleaning up example database file...\n";
-    if (file_exists('example_migration_diff.db')) {
-        unlink('example_migration_diff.db');
-        echo "✅ Cleanup completed.\n";
-    }
 
 } catch (\Exception $e) {
     echo "❌ Error: " . $e->getMessage() . "\n";
     echo "\nStack trace:\n";
     echo $e->getTraceAsString() . "\n";
-    
-    // Clean up on error
-    if (file_exists('example_migration_diff.db')) {
-        unlink('example_migration_diff.db');
-    }
-    
     exit(1);
 }

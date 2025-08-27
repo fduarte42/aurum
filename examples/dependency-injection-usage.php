@@ -80,7 +80,7 @@ class ProductRepositoryWithDI extends Repository
             throw new \RuntimeException('PriceCalculator not injected');
         }
         
-        return $this->priceCalculator->calculateDiscount($product->getPrice(), $discountPercent);
+        return $this->priceCalculator->calculateDiscount($product->price, $discountPercent);
     }
 }
 
@@ -101,10 +101,10 @@ class ProductRepositoryWithCustomConstructor extends Repository
         $discountedProducts = [];
         
         foreach ($products as $product) {
-            $discountedPrice = $this->priceCalculator->calculateDiscount($product->getPrice(), $discountPercent);
+            $discountedPrice = $this->priceCalculator->calculateDiscount($product->price, $discountPercent);
             $discountedProducts[] = [
                 'product' => $product,
-                'original_price' => $product->getPrice(),
+                'original_price' => $product->price,
                 'discounted_price' => $discountedPrice
             ];
         }
@@ -195,7 +195,7 @@ echo "Repository class: " . get_class($customRepo) . "\n";
 $discountedProducts = $customRepo->findDiscountedProducts(15.0);
 echo "Products with 15% discount:\n";
 foreach ($discountedProducts as $item) {
-    echo "- {$item['product']->getName()}: \${$item['original_price']} -> \${$item['discounted_price']}\n";
+    echo "- {$item['product']->name}: \${$item['original_price']} -> \${$item['discounted_price']}\n";
 }
 echo "\n";
 

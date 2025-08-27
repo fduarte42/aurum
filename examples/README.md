@@ -2,6 +2,10 @@
 
 This directory contains comprehensive examples demonstrating how to use Aurum's features.
 
+## Configuration
+
+- **`aurum.config.php`** - Example configuration file for CLI tools. Copy this to your project root to configure database connections, migration settings, and entity paths for the CLI commands.
+
 ## Basic Usage
 
 - **`basic-usage.php`** - Complete example showing entity definition, relationships, and basic ORM operations

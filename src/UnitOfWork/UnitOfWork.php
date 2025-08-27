@@ -366,7 +366,18 @@ class UnitOfWork implements UnitOfWorkInterface
         // Process regular field mappings
         foreach ($metadata->getFieldMappings() as $fieldMapping) {
             $value = $metadata->getFieldValue($entity, $fieldMapping->getFieldName());
-            $data[$fieldMapping->getColumnName()] = $fieldMapping->convertToDatabaseValue($value);
+
+            if ($fieldMapping->isMultiColumn()) {
+                // Handle multi-column mappings
+                $multiColumnValues = $fieldMapping->convertToMultipleDatabaseValues($value);
+                foreach ($multiColumnValues as $postfix => $columnValue) {
+                    $columnName = $fieldMapping->getBaseColumnName() . $postfix;
+                    $data[$columnName] = $columnValue;
+                }
+            } else {
+                // Handle single-column mappings
+                $data[$fieldMapping->getColumnName()] = $fieldMapping->convertToDatabaseValue($value);
+            }
         }
 
         // Process association mappings for foreign keys
@@ -436,9 +447,21 @@ class UnitOfWork implements UnitOfWorkInterface
             }
 
             $value = $metadata->getFieldValue($entity, $fieldMapping->getFieldName());
-            $columnName = $fieldMapping->getColumnName();
-            $data[$columnName] = $fieldMapping->convertToDatabaseValue($value);
-            $setParts[] = $this->connection->quoteIdentifier($columnName) . ' = :' . $columnName;
+
+            if ($fieldMapping->isMultiColumn()) {
+                // Handle multi-column mappings
+                $multiColumnValues = $fieldMapping->convertToMultipleDatabaseValues($value);
+                foreach ($multiColumnValues as $postfix => $columnValue) {
+                    $columnName = $fieldMapping->getBaseColumnName() . $postfix;
+                    $data[$columnName] = $columnValue;
+                    $setParts[] = $this->connection->quoteIdentifier($columnName) . ' = :' . $columnName;
+                }
+            } else {
+                // Handle single-column mappings
+                $columnName = $fieldMapping->getColumnName();
+                $data[$columnName] = $fieldMapping->convertToDatabaseValue($value);
+                $setParts[] = $this->connection->quoteIdentifier($columnName) . ' = :' . $columnName;
+            }
         }
 
         // Process association mappings for foreign keys

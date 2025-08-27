@@ -126,8 +126,8 @@ echo "\n💾 Testing the database...\n";
 // Create some test data
 $user = new User('john@example.com', 'John Doe');
 $post = new Post('Hello World', 'This is my first post!');
-$post->setAuthor($user);
-$post->setPublished(true);
+$post->author = $user;
+$post->published = true;
 
 $entityManager->beginTransaction();
 try {
@@ -140,8 +140,8 @@ try {
     throw $e;
 }
 
-echo "Created user: {$user->getName()} ({$user->getEmail()})\n";
-echo "Created post: {$post->getTitle()}\n";
+echo "Created user: {$user->name} ({$user->email})\n";
+echo "Created post: {$post->title}\n";
 
 // Query the data
 $userRepo = $entityManager->getRepository(User::class);
@@ -149,9 +149,9 @@ $users = $userRepo->findAll();
 
 echo "\n👥 Users in database:\n";
 foreach ($users as $user) {
-    echo "- {$user->getName()} ({$user->getEmail()})\n";
-    foreach ($user->getPosts() as $post) {
-        echo "  📝 {$post->getTitle()}\n";
+    echo "- {$user->name} ({$user->email})\n";
+    foreach ($user->posts as $post) {
+        echo "  📝 {$post->title}\n";
     }
 }
 

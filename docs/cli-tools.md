@@ -237,14 +237,14 @@ php bin/aurum-cli.php migration diff --entities="User" --output=migrations/custo
 
 ### Project Configuration
 
-Create an `aurum.config.php` file in your project root:
+Create an `aurum.config.php` file in your project root (see `examples/aurum.config.php` for a template):
 
 ```php
 <?php
 return [
     'connection' => [
         'driver' => 'sqlite',
-        'path' => 'database.sqlite'
+        'path' => ':memory:'
     ],
     'migrations' => [
         'directory' => 'migrations',
@@ -267,7 +267,7 @@ $configs = [
     'development' => [
         'connection' => [
             'driver' => 'sqlite',
-            'path' => 'dev.sqlite'
+            'path' => ':memory:'
         ]
     ],
     'testing' => [

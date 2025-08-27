@@ -117,6 +117,22 @@ class EntityMetadata implements EntityMetadataInterface
 
         $property = $this->getReflectionProperty($fieldName);
         $property->setAccessible(true);
+
+        // Check if property is initialized before accessing it
+        if (!$property->isInitialized($entity)) {
+            // For nullable properties, return null if not initialized
+            $fieldMapping = $this->getFieldMapping($fieldName);
+            if ($fieldMapping !== null && $fieldMapping->isNullable()) {
+                return null;
+            }
+
+            // For non-nullable properties, this is an error
+            throw new \RuntimeException(
+                "Property '{$fieldName}' in entity '{$this->className}' is not initialized. " .
+                "This usually happens when an entity is created without calling its constructor."
+            );
+        }
+
         return $property->getValue($entity);
     }
 

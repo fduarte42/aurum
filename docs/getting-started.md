@@ -30,7 +30,7 @@ Create a simple configuration for your database connection:
 return [
     'connection' => [
         'driver' => 'sqlite',
-        'path' => 'database.sqlite'
+        'path' => ':memory:'
     ]
 ];
 ```

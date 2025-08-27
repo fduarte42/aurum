@@ -174,7 +174,9 @@ $connection->execute('
         event_date TEXT NOT NULL,
         start_time TEXT NOT NULL,
         created_at TEXT NOT NULL,
-        scheduled_at TEXT NOT NULL
+        scheduled_at_utc TEXT NOT NULL,
+        scheduled_at_local TEXT NOT NULL,
+        scheduled_at_timezone TEXT NOT NULL
     )
 ');
 
