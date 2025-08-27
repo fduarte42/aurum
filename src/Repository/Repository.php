@@ -8,6 +8,7 @@ use Fduarte42\Aurum\EntityManagerInterface;
 use Fduarte42\Aurum\Metadata\EntityMetadataInterface;
 use Fduarte42\Aurum\Query\QueryBuilder;
 use Fduarte42\Aurum\Query\QueryBuilderInterface;
+use Psr\Container\ContainerInterface;
 
 /**
  * Base repository implementation with common CRUD operations
@@ -17,44 +18,102 @@ use Fduarte42\Aurum\Query\QueryBuilderInterface;
  */
 class Repository implements RepositoryInterface
 {
-    public function __construct(
-        private readonly string $className,
-        private readonly EntityManagerInterface $entityManager,
-        private readonly EntityMetadataInterface $metadata
-    ) {
+    protected string $className;
+    protected EntityManagerInterface $entityManager;
+    protected EntityMetadataInterface $metadata;
+    protected ?ContainerInterface $container = null;
+
+    /**
+     * Parameterless constructor for dependency injection
+     * All dependencies will be injected via setters or reflection
+     */
+    public function __construct()
+    {
+        // Dependencies will be injected via reflection or setters
+    }
+
+    /**
+     * Set the entity class name (for dependency injection)
+     */
+    public function setClassName(string $className): void
+    {
+        $this->className = $className;
+    }
+
+    /**
+     * Set the entity manager (for dependency injection)
+     */
+    public function setEntityManager(EntityManagerInterface $entityManager): void
+    {
+        $this->entityManager = $entityManager;
+    }
+
+    /**
+     * Set the entity metadata (for dependency injection)
+     */
+    public function setMetadata(EntityMetadataInterface $metadata): void
+    {
+        $this->metadata = $metadata;
+    }
+
+    /**
+     * Set the container (for dependency injection)
+     */
+    public function setContainer(?ContainerInterface $container): void
+    {
+        $this->container = $container;
+    }
+
+    /**
+     * Check if all required dependencies are injected
+     */
+    protected function ensureDependenciesInjected(): void
+    {
+        if (!isset($this->className)) {
+            throw new \RuntimeException('Repository className not set. Ensure dependency injection is properly configured.');
+        }
+        if (!isset($this->entityManager)) {
+            throw new \RuntimeException('Repository entityManager not set. Ensure dependency injection is properly configured.');
+        }
+        if (!isset($this->metadata)) {
+            throw new \RuntimeException('Repository metadata not set. Ensure dependency injection is properly configured.');
+        }
     }
 
     public function find(mixed $id): ?object
     {
+        $this->ensureDependenciesInjected();
         return $this->entityManager->find($this->className, $id);
     }
 
     public function findAll(): array
     {
+        $this->ensureDependenciesInjected();
         $qb = $this->createQueryBuilder('e');
         return $this->hydrateResults($qb->getResult());
     }
 
     public function findBy(array $criteria, ?array $orderBy = null, ?int $limit = null, ?int $offset = null): array
     {
+        $this->ensureDependenciesInjected();
         $qb = $this->createQueryBuilder('e');
-        
+
         $this->applyCriteria($qb, $criteria);
-        
+
         if ($orderBy !== null) {
             foreach ($orderBy as $field => $direction) {
                 $qb->addOrderBy("e.{$field}", $direction);
             }
         }
-        
+
         if ($limit !== null) {
             $qb->setMaxResults($limit);
         }
-        
+
         if ($offset !== null) {
             $qb->setFirstResult($offset);
         }
-        
+
         return $this->hydrateResults($qb->getResult());
     }
 
@@ -66,16 +125,18 @@ class Repository implements RepositoryInterface
 
     public function count(array $criteria = []): int
     {
+        $this->ensureDependenciesInjected();
         $qb = $this->createQueryBuilder('e')
             ->select('COUNT(*)');
-        
+
         $this->applyCriteria($qb, $criteria);
-        
+
         return (int) $qb->getSingleScalarResult();
     }
 
     public function createQueryBuilder(string $alias): QueryBuilderInterface
     {
+        $this->ensureDependenciesInjected();
         $qb = new QueryBuilder(
             $this->entityManager->getConnection(),
             $this->entityManager->getMetadataFactory()
@@ -94,7 +155,7 @@ class Repository implements RepositoryInterface
                 $fieldMapping->getFieldName()
             );
         }
-        
+
         return $qb
             ->select($selectFields)
             ->from($this->metadata->getTableName(), $alias);
@@ -102,23 +163,26 @@ class Repository implements RepositoryInterface
 
     public function getClassName(): string
     {
+        $this->ensureDependenciesInjected();
         return $this->className;
     }
 
     public function findBySql(string $sql, array $parameters = []): array
     {
+        $this->ensureDependenciesInjected();
         $results = $this->entityManager->getConnection()->fetchAll($sql, $parameters);
         return $this->hydrateResults($results);
     }
 
     public function findOneBySql(string $sql, array $parameters = []): ?object
     {
+        $this->ensureDependenciesInjected();
         $result = $this->entityManager->getConnection()->fetchOne($sql, $parameters);
-        
+
         if ($result === null) {
             return null;
         }
-        
+
         return $this->hydrateEntity($result);
     }
 
@@ -127,6 +191,7 @@ class Repository implements RepositoryInterface
      */
     public function save(object $entity): void
     {
+        $this->ensureDependenciesInjected();
         $this->entityManager->persist($entity);
         $this->entityManager->flush();
     }
@@ -136,6 +201,7 @@ class Repository implements RepositoryInterface
      */
     public function delete(object $entity): void
     {
+        $this->ensureDependenciesInjected();
         $this->entityManager->remove($entity);
         $this->entityManager->flush();
     }
@@ -203,6 +269,7 @@ class Repository implements RepositoryInterface
      */
     private function applyCriteria(QueryBuilderInterface $qb, array $criteria): void
     {
+        $this->ensureDependenciesInjected();
         foreach ($criteria as $field => $value) {
             $columnName = $this->metadata->getColumnName($field);
             $fieldMapping = $this->metadata->getFieldMapping($field);
@@ -258,6 +325,7 @@ class Repository implements RepositoryInterface
      */
     private function hydrateEntity(array $data): object
     {
+        $this->ensureDependenciesInjected();
         $entity = $this->metadata->newInstance();
         
         foreach ($this->metadata->getFieldMappings() as $fieldMapping) {

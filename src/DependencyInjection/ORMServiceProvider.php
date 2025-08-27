@@ -137,7 +137,8 @@ class ORMServiceProvider implements ServiceProviderInterface
                 return new EntityManager(
                     $c->get(ConnectionInterface::class),
                     $c->get(MetadataFactory::class),
-                    $c->get(ProxyFactoryInterface::class)
+                    $c->get(ProxyFactoryInterface::class),
+                    $c
                 );
             });
             $container->set(EntityManager::class, \DI\get(EntityManagerInterface::class));
@@ -146,7 +147,8 @@ class ORMServiceProvider implements ServiceProviderInterface
                 return new EntityManager(
                     $c->make(ConnectionInterface::class),
                     $c->make(MetadataFactory::class),
-                    $c->make(ProxyFactoryInterface::class)
+                    $c->make(ProxyFactoryInterface::class),
+                    $c
                 );
             });
             $container->bind(EntityManager::class, EntityManagerInterface::class);
@@ -155,7 +157,8 @@ class ORMServiceProvider implements ServiceProviderInterface
                 return new EntityManager(
                     $container->get(ConnectionInterface::class),
                     $container->get(MetadataFactory::class),
-                    $container->get(ProxyFactoryInterface::class)
+                    $container->get(ProxyFactoryInterface::class),
+                    $container
                 );
             });
             $container->set(EntityManager::class, $container->get(EntityManagerInterface::class));

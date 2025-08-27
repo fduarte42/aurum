@@ -19,6 +19,11 @@ interface EntityManagerInterface
     public function getConnection(): ConnectionInterface;
 
     /**
+     * Get the metadata factory
+     */
+    public function getMetadataFactory(): \Fduarte42\Aurum\Metadata\MetadataFactory;
+
+    /**
      * Get the current unit of work
      */
     public function getUnitOfWork(): UnitOfWorkInterface;

@@ -11,9 +11,11 @@ use Fduarte42\Aurum\Migration\MigrationManager;
 use Fduarte42\Aurum\Migration\MigrationManagerInterface;
 use Fduarte42\Aurum\Proxy\ProxyFactoryInterface;
 use Fduarte42\Aurum\Repository\Repository;
+use Fduarte42\Aurum\Repository\RepositoryFactory;
 use Fduarte42\Aurum\Repository\RepositoryInterface;
 use Fduarte42\Aurum\UnitOfWork\UnitOfWork;
 use Fduarte42\Aurum\UnitOfWork\UnitOfWorkInterface;
+use Psr\Container\ContainerInterface;
 
 /**
  * Entity Manager implementation managing multiple UnitOfWorks
@@ -32,11 +34,17 @@ class EntityManager implements EntityManagerInterface
 
     private ?MigrationManagerInterface $migrationManager = null;
 
+    private ?ContainerInterface $container = null;
+
+    private ?RepositoryFactory $repositoryFactory = null;
+
     public function __construct(
         private readonly ConnectionInterface $connection,
         private readonly MetadataFactory $metadataFactory,
-        private readonly ProxyFactoryInterface $proxyFactory
+        private readonly ProxyFactoryInterface $proxyFactory,
+        ?ContainerInterface $container = null
     ) {
+        $this->container = $container;
         $this->currentUnitOfWork = $this->createUnitOfWork();
     }
 
@@ -48,6 +56,24 @@ class EntityManager implements EntityManagerInterface
     public function getMetadataFactory(): MetadataFactory
     {
         return $this->metadataFactory;
+    }
+
+    /**
+     * Set the dependency injection container
+     */
+    public function setContainer(?ContainerInterface $container): void
+    {
+        $this->container = $container;
+        // Reset repository factory to pick up new container
+        $this->repositoryFactory = null;
+    }
+
+    /**
+     * Get the dependency injection container
+     */
+    public function getContainer(): ?ContainerInterface
+    {
+        return $this->container;
     }
 
     public function getUnitOfWork(): UnitOfWorkInterface
@@ -136,15 +162,47 @@ class EntityManager implements EntityManagerInterface
     {
         if (!isset($this->repositories[$className])) {
             $metadata = $this->metadataFactory->getMetadataFor($className);
-            
-            $this->repositories[$className] = new Repository(
-                $className,
-                $this,
-                $metadata
-            );
+
+            // Check if entity has a custom repository class defined
+            $repositoryClass = $this->getCustomRepositoryClass($className);
+
+            // Use repository factory for dependency injection support
+            $factory = $this->getRepositoryFactory();
+            $this->repositories[$className] = $factory->createRepository($className, $repositoryClass);
         }
-        
+
         return $this->repositories[$className];
+    }
+
+    /**
+     * Get the repository factory
+     */
+    private function getRepositoryFactory(): RepositoryFactory
+    {
+        if ($this->repositoryFactory === null) {
+            $this->repositoryFactory = new RepositoryFactory($this, $this->container);
+        }
+
+        return $this->repositoryFactory;
+    }
+
+    /**
+     * Get custom repository class from entity metadata if defined
+     */
+    private function getCustomRepositoryClass(string $entityClass): ?string
+    {
+        $metadata = $this->metadataFactory->getMetadataFor($entityClass);
+
+        // Check if the entity has a custom repository class defined in its Entity attribute
+        $reflection = new \ReflectionClass($entityClass);
+        $entityAttributes = $reflection->getAttributes(\Fduarte42\Aurum\Attribute\Entity::class);
+
+        if (!empty($entityAttributes)) {
+            $entityAttribute = $entityAttributes[0]->newInstance();
+            return $entityAttribute->repositoryClass;
+        }
+
+        return null;
     }
 
     public function beginTransaction(): void
