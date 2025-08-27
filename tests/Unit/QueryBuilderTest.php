@@ -269,7 +269,7 @@ class QueryBuilderTest extends TestCase
             ->getSingleScalarResult();
     }
 
-    public function testGetResult(): void
+    public function testGetArrayResult(): void
     {
         // Create test table and data
         $connection = $this->queryBuilder->getConnection();
@@ -281,7 +281,7 @@ class QueryBuilderTest extends TestCase
             ->select('*')
             ->from('test_table', 't')
             ->orderBy('t.id')
-            ->getResult();
+            ->getArrayResult();
 
         // Test that we get a PDOStatement
         $this->assertInstanceOf(\PDOStatement::class, $statement);
@@ -295,6 +295,22 @@ class QueryBuilderTest extends TestCase
         $this->assertCount(2, $results);
         $this->assertEquals(['id' => 1, 'name' => 'test1'], $results[0]);
         $this->assertEquals(['id' => 2, 'name' => 'test2'], $results[1]);
+    }
+
+    public function testGetResultWithoutEntityClass(): void
+    {
+        // Create test table and data
+        $connection = $this->queryBuilder->getConnection();
+        $connection->execute('CREATE TABLE test_table (id INTEGER, name TEXT)');
+        $connection->execute('INSERT INTO test_table VALUES (1, "test1")');
+
+        $this->expectException(\Fduarte42\Aurum\Exception\ORMException::class);
+        $this->expectExceptionMessage('Cannot hydrate entities: root entity class and metadata factory must be set');
+
+        $this->queryBuilder
+            ->select('*')
+            ->from('test_table', 't')
+            ->getResult();
     }
 
     public function testMultipleGroupBy(): void

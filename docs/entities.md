@@ -425,12 +425,17 @@ $usersWithRoles = $entityManager->createQueryBuilder('u')
 **Counting Related Entities:**
 ```php
 // Count roles per user
-$userRoleCounts = $entityManager->createQueryBuilder('u')
+$statement = $entityManager->createQueryBuilder('u')
     ->select('u.name', 'COUNT(r.id) as roleCount')
     ->from(User::class, 'u')
     ->leftJoin('u.roles', 'r')
     ->groupBy('u.id', 'u.name')
-    ->getResult();
+    ->getArrayResult();
+
+$userRoleCounts = [];
+foreach ($statement as $row) {
+    $userRoleCounts[] = $row;
+}
 ```
 
 ##### Performance Tips for Many-to-Many Queries

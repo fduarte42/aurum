@@ -26,7 +26,7 @@ class QueryBuilderPDOStatementTest extends TestCase
         $this->queryBuilder = new QueryBuilder($connection);
     }
 
-    public function testGetResultReturnsPDOStatement(): void
+    public function testGetArrayResultReturnsPDOStatement(): void
     {
         // Create test table and data
         $connection = $this->queryBuilder->getConnection();
@@ -38,7 +38,7 @@ class QueryBuilderPDOStatementTest extends TestCase
             ->select('*')
             ->from('test_table', 't')
             ->orderBy('t.id')
-            ->getResult();
+            ->getArrayResult();
 
         $this->assertInstanceOf(PDOStatement::class, $statement);
     }
@@ -56,7 +56,7 @@ class QueryBuilderPDOStatementTest extends TestCase
             ->select('*')
             ->from('test_table', 't')
             ->orderBy('t.id')
-            ->getResult();
+            ->getArrayResult();
 
         // Test iteration over PDOStatement (fetch mode already set to ASSOC)
         $results = [];
@@ -80,7 +80,7 @@ class QueryBuilderPDOStatementTest extends TestCase
         $statement = $this->queryBuilder
             ->select('*')
             ->from('test_table', 't')
-            ->getResult();
+            ->getArrayResult();
 
         // Test default FETCH_ASSOC (already set)
         $row = $statement->fetch();
@@ -91,7 +91,7 @@ class QueryBuilderPDOStatementTest extends TestCase
         $statement2 = $this->queryBuilder
             ->select('*')
             ->from('test_table', 't')
-            ->getResult();
+            ->getArrayResult();
 
         // Test FETCH_NUM
         $statement2->setFetchMode(PDO::FETCH_NUM);
@@ -115,7 +115,7 @@ class QueryBuilderPDOStatementTest extends TestCase
         $statement = $this->queryBuilder
             ->select('*')
             ->from('large_table', 't')
-            ->getResult();
+            ->getArrayResult();
 
         $memoryAfter = memory_get_usage();
         
@@ -143,7 +143,7 @@ class QueryBuilderPDOStatementTest extends TestCase
         $this->queryBuilder
             ->select('invalid_column')
             ->from('nonexistent_table', 't')
-            ->getResult();
+            ->getArrayResult();
     }
 
     public function testPDOStatementWithComplexQuery(): void
@@ -165,7 +165,7 @@ class QueryBuilderPDOStatementTest extends TestCase
             ->innerJoin('posts', 'p', 'u.id = p.user_id')
             ->where('u.name = :name')
             ->setParameter('name', 'John')
-            ->getResult();
+            ->getArrayResult();
 
         $results = [];
         foreach ($statement as $row) {

@@ -53,6 +53,16 @@ interface UnitOfWorkInterface
     public function clear(): void;
 
     /**
+     * Add an entity to the identity map without marking it as new
+     */
+    public function addToIdentityMap(string $identityKey, object $entity): void;
+
+    /**
+     * Set original entity data for change tracking
+     */
+    public function setOriginalEntityData(object $entity): void;
+
+    /**
      * Get the current savepoint name for this unit of work
      */
     public function getSavepointName(): string;

@@ -74,6 +74,17 @@ interface EntityManagerInterface
     public function contains(object $entity): bool;
 
     /**
+     * Attach a detached entity to the current unit of work for change tracking
+     *
+     * This method allows you to take entities returned from getResult() and
+     * explicitly attach them to a UnitOfWork for modification and persistence.
+     *
+     * @param object $entity The detached entity to attach
+     * @return object The managed entity (may be the same instance or a different one if already managed)
+     */
+    public function manage(object $entity): object;
+
+    /**
      * Flush all pending changes in the current unit of work
      */
     public function flush(): void;

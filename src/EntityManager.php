@@ -131,6 +131,40 @@ class EntityManager implements EntityManagerInterface
         return $this->currentUnitOfWork->contains($entity);
     }
 
+    public function manage(object $entity): object
+    {
+        $className = $this->proxyFactory->getRealClass($entity);
+        $metadata = $this->metadataFactory->getMetadataFor($className);
+        $id = $metadata->getIdentifierValue($entity);
+
+        if ($id === null) {
+            // Entity has no ID, treat as new entity
+            $this->persist($entity);
+            return $entity;
+        }
+
+        // Check if entity is already managed
+        $managedEntity = $this->currentUnitOfWork->find($className, $id);
+        if ($managedEntity !== null) {
+            // Copy state from detached entity to managed entity
+            foreach ($metadata->getFieldMappings() as $fieldMapping) {
+                if (!$fieldMapping->isIdentifier()) {
+                    $value = $metadata->getFieldValue($entity, $fieldMapping->getFieldName());
+                    $metadata->setFieldValue($managedEntity, $fieldMapping->getFieldName(), $value);
+                }
+            }
+            return $managedEntity;
+        }
+
+        // Entity is not managed, attach it to the current UnitOfWork
+        // For entities with existing IDs, we need to add them to the identity map
+        // without marking them as new insertions
+        $identityKey = $className . '.' . $id;
+        $this->currentUnitOfWork->addToIdentityMap($identityKey, $entity);
+        $this->currentUnitOfWork->setOriginalEntityData($entity);
+        return $entity;
+    }
+
     public function flush(): void
     {
         $wasInTransaction = $this->connection->inTransaction();

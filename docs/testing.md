@@ -207,13 +207,18 @@ public function testQueryBuilder(): void
     $this->entityManager->flush();
     
     // Test query builder
-    $users = $this->entityManager->createQueryBuilder('u')
+    $statement = $this->entityManager->createQueryBuilder('u')
         ->select('u.name, u.email')
         ->from(User::class, 'u')
         ->where('u.name LIKE :name')
         ->setParameter('name', 'John%')
-        ->getResult();
-    
+        ->getArrayResult();
+
+    $users = [];
+    foreach ($statement as $row) {
+        $users[] = $row;
+    }
+
     $this->assertCount(1, $users);
     $this->assertEquals('John Doe', $users[0]['name']);
 }

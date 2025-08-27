@@ -174,7 +174,7 @@ $qb = $taskRepo->createQueryBuilder('t')
     ->setParameter('categoryName', 'Development')
     ->setParameter('minHours', 4.0);
 
-$statement = $qb->getResult();
+$statement = $qb->getArrayResult();
 $results = [];
 foreach ($statement as $row) {
     $results[] = $row;

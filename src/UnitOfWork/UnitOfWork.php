@@ -254,6 +254,16 @@ class UnitOfWork implements UnitOfWorkInterface
         return $this->savepointName;
     }
 
+    public function addToIdentityMap(string $identityKey, object $entity): void
+    {
+        $this->identityMap[$identityKey] = $entity;
+    }
+
+    public function setOriginalEntityData(object $entity): void
+    {
+        $this->originalEntityData[$entity] = $this->extractEntityData($entity);
+    }
+
     public function createSavepoint(): void
     {
         if (!$this->savepointCreated && $this->connection->inTransaction()) {

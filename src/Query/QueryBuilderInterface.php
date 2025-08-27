@@ -145,7 +145,14 @@ interface QueryBuilderInterface
      *
      * @return \PDOStatement
      */
-    public function getResult(): \PDOStatement;
+    public function getArrayResult(): \PDOStatement;
+
+    /**
+     * Execute the query and return hydrated entity objects (unmanaged/detached)
+     *
+     * @return array<object>
+     */
+    public function getResult(): array;
 
     /**
      * Execute the query and return one result

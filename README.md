@@ -438,7 +438,11 @@ $qb = $todoRepo->createQueryBuilder('t')
     ->setParameter('email', 'john@example.com')
     ->setParameter('minPriority', '5.00');
 
-$results = $qb->getResult();
+// Get raw array data (PDOStatement iterator)
+$statement = $qb->getArrayResult();
+
+// Or get hydrated entity objects (detached/unmanaged)
+$todos = $qb->getResult();
 ```
 
 ### Lazy Loading with Proxies
@@ -473,7 +477,7 @@ class TodoRepository extends Repository
             ->setParameter('userId', $user->getId())
             ->setParameter('completed', true);
 
-        return $this->hydrateResults($qb->getResult());
+        return $this->hydrateResults($qb->getArrayResult());
     }
 }
 ```

@@ -183,7 +183,7 @@ class TodoAppTest extends TestCase
             ->setParameter('email', 'test@example.com')
             ->setParameter('minPriority', '5.00');
 
-        $statement = $qb->getResult();
+        $statement = $qb->getArrayResult();
         $results = [];
         foreach ($statement as $row) {
             $results[] = $row;

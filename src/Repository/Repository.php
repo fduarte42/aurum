@@ -90,7 +90,7 @@ class Repository implements RepositoryInterface
     {
         $this->ensureDependenciesInjected();
         $qb = $this->createQueryBuilder('e');
-        return $this->hydrateResults($qb->getResult());
+        return $this->hydrateResults($qb->getArrayResult());
     }
 
     public function findBy(array $criteria, ?array $orderBy = null, ?int $limit = null, ?int $offset = null): array
@@ -114,7 +114,7 @@ class Repository implements RepositoryInterface
             $qb->setFirstResult($offset);
         }
 
-        return $this->hydrateResults($qb->getResult());
+        return $this->hydrateResults($qb->getArrayResult());
     }
 
     public function findOneBy(array $criteria, ?array $orderBy = null): ?object
@@ -247,8 +247,8 @@ class Repository implements RepositoryInterface
         $qb = $this->createQueryBuilder('e')
             ->where("e.{$field} LIKE :pattern")
             ->setParameter('pattern', $pattern);
-        
-        return $this->hydrateResults($qb->getResult());
+
+        return $this->hydrateResults($qb->getArrayResult());
     }
 
     /**
@@ -260,8 +260,8 @@ class Repository implements RepositoryInterface
             ->where("e.{$field} BETWEEN :min AND :max")
             ->setParameter('min', $min)
             ->setParameter('max', $max);
-        
-        return $this->hydrateResults($qb->getResult());
+
+        return $this->hydrateResults($qb->getArrayResult());
     }
 
     /**
@@ -370,9 +370,10 @@ class Repository implements RepositoryInterface
         // Add to unit of work if it has an identifier
         $id = $this->metadata->getIdentifierValue($entity);
         if ($id !== null) {
-            $this->entityManager->getUnitOfWork()->persist($entity);
+            // Use manage() instead of persist() to handle existing entities properly
+            return $this->entityManager->manage($entity);
         }
-        
+
         return $entity;
     }
 }

@@ -123,7 +123,7 @@ $qb->from(User::class, 'u')->innerJoin('u.roles', 'r');
 
 ## Query Execution Methods
 
-### `getResult(): \PDOStatement`
+### `getArrayResult(): \PDOStatement`
 
 Execute the query and return a PDOStatement iterator for efficient iteration over database results without loading all records into memory at once. The fetch mode is automatically set to `PDO::FETCH_ASSOC`.
 
@@ -132,12 +132,37 @@ $statement = $qb->from(User::class, 'u')
                 ->innerJoin('u.roles', 'r')
                 ->where('r.name = :role')
                 ->setParameter('role', 'admin')
-                ->getResult();
+                ->getArrayResult();
 
 // Iterate efficiently over results (fetch mode already set to ASSOC)
 foreach ($statement as $row) {
     // Process each row without loading all into memory
     echo "User: {$row['name']}\n";
+}
+```
+
+### `getResult(): array<object>`
+
+Execute the query and return hydrated entity objects. The returned entities are **detached** (not tracked by any UnitOfWork), providing read-only access by default. Use `EntityManager::manage()` to attach entities for change tracking if needed.
+
+```php
+$users = $qb->from(User::class, 'u')
+            ->innerJoin('u.roles', 'r')
+            ->where('r.name = :role')
+            ->setParameter('role', 'admin')
+            ->getResult();
+
+// Returns array of User entity objects (detached)
+foreach ($users as $user) {
+    echo "User: {$user->getName()}\n";
+    // $user is not tracked for changes
+}
+
+// To make entities trackable for changes:
+foreach ($users as $user) {
+    $managedUser = $entityManager->manage($user);
+    $managedUser->setName('Updated Name');
+    // Now changes will be tracked
 }
 ```
 

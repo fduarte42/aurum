@@ -303,12 +303,28 @@ class QueryBuilder implements QueryBuilderInterface
         return $this->connection;
     }
 
-    public function getResult(): \PDOStatement
+    public function getArrayResult(): \PDOStatement
     {
         $sql = $this->getSQL();
         $statement = $this->connection->execute($sql, $this->parameters);
         $statement->setFetchMode(\PDO::FETCH_ASSOC);
         return $statement;
+    }
+
+    public function getResult(): array
+    {
+        if (!$this->rootEntityClass || !$this->metadataFactory) {
+            throw new ORMException("Cannot hydrate entities: root entity class and metadata factory must be set. Use getArrayResult() for raw data or set entity class with from().");
+        }
+
+        $statement = $this->getArrayResult();
+        $entities = [];
+
+        foreach ($statement as $row) {
+            $entities[] = $this->hydrateEntityDetached($row);
+        }
+
+        return $entities;
     }
 
     public function getOneOrNullResult(): ?array
@@ -386,8 +402,61 @@ class QueryBuilder implements QueryBuilderInterface
         $this->maxResults = null;
         $this->firstResult = null;
         $this->parameters = [];
-        
+
         return $this;
+    }
+
+    /**
+     * Hydrate a single database result into a detached entity (not tracked by UnitOfWork)
+     */
+    private function hydrateEntityDetached(array $data): object
+    {
+        if (!$this->rootEntityClass || !$this->metadataFactory) {
+            throw new ORMException("Cannot hydrate entity: root entity class and metadata factory must be set.");
+        }
+
+        // Determine the correct entity class for inheritance hierarchies
+        $entityClass = $this->rootEntityClass;
+        $metadata = $this->metadataFactory->getMetadataFor($entityClass);
+
+        if ($metadata->hasInheritance()) {
+            $inheritanceMapping = $metadata->getInheritanceMapping();
+            $discriminatorColumn = $inheritanceMapping->getDiscriminatorColumn();
+
+            // Check if discriminator value is present in the data
+            if (isset($data[$discriminatorColumn]) || isset($data['__discriminator'])) {
+                $discriminatorValue = $data[$discriminatorColumn] ?? $data['__discriminator'];
+                $actualEntityClass = $inheritanceMapping->getClassNameForDiscriminatorValue($discriminatorValue);
+
+                if ($actualEntityClass !== $entityClass && class_exists($actualEntityClass)) {
+                    $entityClass = $actualEntityClass;
+                    $metadata = $this->metadataFactory->getMetadataFor($entityClass);
+                }
+            }
+        }
+
+        $entity = $metadata->newInstance();
+
+        foreach ($metadata->getFieldMappings() as $fieldMapping) {
+            $fieldName = $fieldMapping->getFieldName();
+            $columnName = $fieldMapping->getColumnName();
+
+            // Skip discriminator field as it's virtual
+            if ($fieldName === '__discriminator') {
+                continue;
+            }
+
+            if (isset($data[$fieldName])) {
+                // Data is already mapped by field name (from query builder)
+                $metadata->setFieldValue($entity, $fieldName, $data[$fieldName]);
+            } elseif (isset($data[$columnName])) {
+                // Data is mapped by column name (from raw SQL)
+                $metadata->setFieldValue($entity, $fieldName, $data[$columnName]);
+            }
+        }
+
+        // Return detached entity (not added to any UnitOfWork)
+        return $entity;
     }
 
     /**
