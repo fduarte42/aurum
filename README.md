@@ -105,7 +105,7 @@ class Todo
         #[Column(type: 'string', length: 255)]
         public string $title,
 
-        #[Column(type: 'decimal', precision: 10, scale: 2, nullable: true)]
+        #[Column(type: 'decimal_ext', precision: 10, scale: 2, nullable: true)]
         public ?Decimal $priority = null,
 
         #[Column(type: 'boolean')]
@@ -868,7 +868,7 @@ See `examples/migrations-usage.php` and `examples/sample-migrations/` for comple
 
 ## Recent Improvements
 
-### Version 2024.1 - Test Suite Cleanup & Stability
+### Test Suite Cleanup & Stability
 
 **🧪 Test Suite Enhancements:**
 - **✅ Achieved 100% clean test suite** - 801 tests, 0 failures/warnings/deprecations
