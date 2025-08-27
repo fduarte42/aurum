@@ -326,21 +326,47 @@ class Repository implements RepositoryInterface
     private function hydrateEntity(array $data): object
     {
         $this->ensureDependenciesInjected();
-        $entity = $this->metadata->newInstance();
-        
-        foreach ($this->metadata->getFieldMappings() as $fieldMapping) {
-            $fieldName = $fieldMapping->getFieldName();
-            $columnName = $fieldMapping->getColumnName();
-            
-            if (isset($data[$fieldName])) {
-                // Data is already mapped by field name (from query builder)
-                $this->metadata->setFieldValue($entity, $fieldName, $data[$fieldName]);
-            } elseif (isset($data[$columnName])) {
-                // Data is mapped by column name (from raw SQL)
-                $this->metadata->setFieldValue($entity, $fieldName, $data[$columnName]);
+
+        // Determine the correct entity class for inheritance hierarchies
+        $entityClass = $this->className;
+        $metadata = $this->metadata;
+
+        if ($this->metadata->hasInheritance()) {
+            $inheritanceMapping = $this->metadata->getInheritanceMapping();
+            $discriminatorColumn = $inheritanceMapping->getDiscriminatorColumn();
+
+            // Check if discriminator value is present in the data
+            if (isset($data[$discriminatorColumn]) || isset($data['__discriminator'])) {
+                $discriminatorValue = $data[$discriminatorColumn] ?? $data['__discriminator'];
+                $actualEntityClass = $inheritanceMapping->getClassNameForDiscriminatorValue($discriminatorValue);
+
+                if ($actualEntityClass !== $entityClass && class_exists($actualEntityClass)) {
+                    $entityClass = $actualEntityClass;
+                    $metadata = $this->entityManager->getMetadataFactory()->getMetadataFor($entityClass);
+                }
             }
         }
+
+        $entity = $metadata->newInstance();
         
+        foreach ($metadata->getFieldMappings() as $fieldMapping) {
+            $fieldName = $fieldMapping->getFieldName();
+            $columnName = $fieldMapping->getColumnName();
+
+            // Skip discriminator field as it's virtual
+            if ($fieldName === '__discriminator') {
+                continue;
+            }
+
+            if (isset($data[$fieldName])) {
+                // Data is already mapped by field name (from query builder)
+                $metadata->setFieldValue($entity, $fieldName, $data[$fieldName]);
+            } elseif (isset($data[$columnName])) {
+                // Data is mapped by column name (from raw SQL)
+                $metadata->setFieldValue($entity, $fieldName, $data[$columnName]);
+            }
+        }
+
         // Add to unit of work if it has an identifier
         $id = $this->metadata->getIdentifierValue($entity);
         if ($id !== null) {

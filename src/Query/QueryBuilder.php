@@ -6,6 +6,7 @@ namespace Fduarte42\Aurum\Query;
 
 use Fduarte42\Aurum\Connection\ConnectionInterface;
 use Fduarte42\Aurum\Exception\ORMException;
+use Fduarte42\Aurum\Metadata\EntityMetadataInterface;
 use Fduarte42\Aurum\Metadata\MetadataFactory;
 
 /**
@@ -58,6 +59,9 @@ class QueryBuilder implements QueryBuilderInterface
             // Resolve table name from entity class
             $metadata = $this->metadataFactory->getMetadataFor($table);
             $this->from = $metadata->getTableName();
+
+            // Add discriminator WHERE clause for inheritance hierarchies
+            $this->addInheritanceDiscriminatorCondition($metadata, $alias);
         }
 
         return $this;
@@ -530,5 +534,110 @@ class QueryBuilder implements QueryBuilderInterface
         }
 
         return $propertyName;
+    }
+
+    /**
+     * Add discriminator WHERE condition for inheritance hierarchies
+     */
+    private function addInheritanceDiscriminatorCondition(EntityMetadataInterface $metadata, string $alias): void
+    {
+        if (!$metadata->hasInheritance()) {
+            return;
+        }
+
+        $inheritanceMapping = $metadata->getInheritanceMapping();
+        if ($inheritanceMapping === null) {
+            return;
+        }
+
+        $discriminatorColumn = $inheritanceMapping->getDiscriminatorColumn();
+        $className = $metadata->getClassName();
+
+        if ($inheritanceMapping->isRootClass()) {
+            // For root class, include all classes in the hierarchy
+            $allClasses = $inheritanceMapping->getAllClassNames();
+            if (count($allClasses) > 1) {
+                // Only add condition if there are child classes
+                $discriminatorValues = array_map(
+                    fn($class) => $inheritanceMapping->getDiscriminatorValue($class),
+                    $allClasses
+                );
+
+                $placeholders = [];
+                foreach ($discriminatorValues as $index => $value) {
+                    $paramName = 'discriminator_' . $index;
+                    $placeholders[] = ':' . $paramName;
+                    $this->setParameter($paramName, $value);
+                }
+
+                $this->andWhere("{$alias}.{$discriminatorColumn} IN (" . implode(', ', $placeholders) . ")");
+            }
+        } else {
+            // For child class, only include this specific class
+            $discriminatorValue = $inheritanceMapping->getDiscriminatorValue($className);
+            $paramName = 'discriminator_exact';
+            $this->andWhere("{$alias}.{$discriminatorColumn} = :{$paramName}")
+                 ->setParameter($paramName, $discriminatorValue);
+        }
+    }
+
+    /**
+     * Add inheritance-aware WHERE condition for a specific entity class
+     */
+    public function whereEntityClass(string $entityClass, string $alias = null): self
+    {
+        if ($this->metadataFactory === null) {
+            throw new \RuntimeException('MetadataFactory is required for inheritance-aware queries');
+        }
+
+        $alias = $alias ?? $this->fromAlias ?? 'e';
+        $metadata = $this->metadataFactory->getMetadataFor($entityClass);
+
+        if ($metadata->hasInheritance()) {
+            $inheritanceMapping = $metadata->getInheritanceMapping();
+            $discriminatorColumn = $inheritanceMapping->getDiscriminatorColumn();
+            $discriminatorValue = $inheritanceMapping->getDiscriminatorValue($entityClass);
+
+            $paramName = 'entity_class_discriminator';
+            $this->andWhere("{$alias}.{$discriminatorColumn} = :{$paramName}")
+                 ->setParameter($paramName, $discriminatorValue);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Add inheritance-aware WHERE condition to exclude specific entity classes
+     */
+    public function whereNotEntityClass(array $entityClasses, string $alias = null): self
+    {
+        if ($this->metadataFactory === null || empty($entityClasses)) {
+            return $this;
+        }
+
+        $alias = $alias ?? $this->fromAlias ?? 'e';
+        $firstClass = reset($entityClasses);
+        $metadata = $this->metadataFactory->getMetadataFor($firstClass);
+
+        if ($metadata->hasInheritance()) {
+            $inheritanceMapping = $metadata->getInheritanceMapping();
+            $discriminatorColumn = $inheritanceMapping->getDiscriminatorColumn();
+
+            $discriminatorValues = array_map(
+                fn($class) => $inheritanceMapping->getDiscriminatorValue($class),
+                $entityClasses
+            );
+
+            $placeholders = [];
+            foreach ($discriminatorValues as $index => $value) {
+                $paramName = 'exclude_discriminator_' . $index;
+                $placeholders[] = ':' . $paramName;
+                $this->setParameter($paramName, $value);
+            }
+
+            $this->andWhere("{$alias}.{$discriminatorColumn} NOT IN (" . implode(', ', $placeholders) . ")");
+        }
+
+        return $this;
     }
 }

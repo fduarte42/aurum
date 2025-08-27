@@ -101,4 +101,24 @@ interface EntityMetadataInterface
      * Get field name for column
      */
     public function getFieldName(string $columnName): string;
+
+    /**
+     * Get inheritance mapping (null if not part of inheritance hierarchy)
+     */
+    public function getInheritanceMapping(): ?InheritanceMappingInterface;
+
+    /**
+     * Check if this entity is part of an inheritance hierarchy
+     */
+    public function hasInheritance(): bool;
+
+    /**
+     * Check if this entity is the root of an inheritance hierarchy
+     */
+    public function isInheritanceRoot(): bool;
+
+    /**
+     * Get the discriminator value for this entity class
+     */
+    public function getDiscriminatorValue(): ?string;
 }

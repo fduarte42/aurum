@@ -20,8 +20,10 @@ class EntityMetadata implements EntityMetadataInterface
     
     /** @var array<string, AssociationMappingInterface> */
     private array $associationMappings = [];
-    
+
     private ?string $identifierFieldName = null;
+
+    private ?InheritanceMappingInterface $inheritanceMapping = null;
 
     public function __construct(
         private readonly string $className,
@@ -108,22 +110,76 @@ class EntityMetadata implements EntityMetadataInterface
 
     public function getFieldValue(object $entity, string $fieldName): mixed
     {
+        // Handle discriminator field specially
+        if ($fieldName === '__discriminator' && $this->hasInheritance()) {
+            return get_class($entity);
+        }
+
         $property = $this->getReflectionProperty($fieldName);
         $property->setAccessible(true);
         return $property->getValue($entity);
     }
 
+    /**
+     * Get field value as multiple database column values (for multi-column mappings)
+     */
+    public function getFieldValueAsMultipleColumns(object $entity, string $fieldName): array
+    {
+        $value = $this->getFieldValue($entity, $fieldName);
+
+        $fieldMapping = $this->getFieldMapping($fieldName);
+        if ($fieldMapping !== null && $fieldMapping->isMultiColumn()) {
+            // Use multi-column conversion
+            return $fieldMapping->convertToMultipleDatabaseValues($value);
+        } else {
+            // Fallback: convert single value
+            $dbValue = $fieldMapping?->convertToDatabaseValue($value) ?? $value;
+            return [$fieldMapping?->getColumnName() ?? $fieldName => $dbValue];
+        }
+    }
+
     public function setFieldValue(object $entity, string $fieldName, mixed $value): void
     {
+        // Handle discriminator field specially - it's read-only, determined by entity class
+        if ($fieldName === '__discriminator') {
+            return; // Discriminator is automatically determined by entity class
+        }
+
         $property = $this->getReflectionProperty($fieldName);
         $property->setAccessible(true);
-        
+
         // Convert database value to PHP value if we have a field mapping
         $fieldMapping = $this->getFieldMapping($fieldName);
         if ($fieldMapping !== null) {
             $value = $fieldMapping->convertToPHPValue($value);
         }
-        
+
+        $property->setValue($entity, $value);
+    }
+
+    /**
+     * Set field value from multiple database column values (for multi-column mappings)
+     */
+    public function setFieldValueFromMultipleColumns(object $entity, string $fieldName, array $columnValues): void
+    {
+        $property = $this->getReflectionProperty($fieldName);
+        $property->setAccessible(true);
+
+        $fieldMapping = $this->getFieldMapping($fieldName);
+        if ($fieldMapping !== null && $fieldMapping->isMultiColumn()) {
+            // Use multi-column conversion
+            $value = $fieldMapping->convertFromMultipleDatabaseValues($columnValues);
+        } else {
+            // Fallback: use the first non-null value
+            $value = null;
+            foreach ($columnValues as $columnValue) {
+                if ($columnValue !== null) {
+                    $value = $fieldMapping?->convertToPHPValue($columnValue) ?? $columnValue;
+                    break;
+                }
+            }
+        }
+
         $property->setValue($entity, $value);
     }
 
@@ -136,7 +192,13 @@ class EntityMetadata implements EntityMetadataInterface
     {
         $columns = [];
         foreach ($this->fieldMappings as $fieldMapping) {
-            $columns[] = $fieldMapping->getColumnName();
+            if ($fieldMapping->isMultiColumn()) {
+                // Add all columns for multi-column mappings
+                $columns = array_merge($columns, $fieldMapping->getColumnNames());
+            } else {
+                // Add single column for regular mappings
+                $columns[] = $fieldMapping->getColumnName();
+            }
         }
         return $columns;
     }
@@ -150,15 +212,97 @@ class EntityMetadata implements EntityMetadataInterface
     public function getFieldName(string $columnName): string
     {
         foreach ($this->fieldMappings as $fieldMapping) {
-            if ($fieldMapping->getColumnName() === $columnName) {
-                return $fieldMapping->getFieldName();
+            if ($fieldMapping->isMultiColumn()) {
+                // Check if column name matches any of the multi-column names
+                if (in_array($columnName, $fieldMapping->getColumnNames(), true)) {
+                    return $fieldMapping->getFieldName();
+                }
+            } else {
+                // Check single column mapping
+                if ($fieldMapping->getColumnName() === $columnName) {
+                    return $fieldMapping->getFieldName();
+                }
             }
         }
         return $columnName;
     }
 
+    public function getInheritanceMapping(): ?InheritanceMappingInterface
+    {
+        return $this->inheritanceMapping;
+    }
+
+    public function setInheritanceMapping(?InheritanceMappingInterface $inheritanceMapping): void
+    {
+        $this->inheritanceMapping = $inheritanceMapping;
+
+        // Automatically add discriminator field mapping if this is the root class
+        if ($inheritanceMapping !== null && $inheritanceMapping->isRootClass()) {
+            $this->addDiscriminatorFieldMapping($inheritanceMapping);
+        }
+    }
+
+    public function hasInheritance(): bool
+    {
+        return $this->inheritanceMapping !== null;
+    }
+
+    public function isInheritanceRoot(): bool
+    {
+        return $this->inheritanceMapping !== null && $this->inheritanceMapping->isRootClass();
+    }
+
+    public function getDiscriminatorValue(): ?string
+    {
+        if ($this->inheritanceMapping === null) {
+            return null;
+        }
+
+        return $this->inheritanceMapping->getDiscriminatorValue($this->className);
+    }
+
+    /**
+     * Add discriminator field mapping for inheritance
+     */
+    private function addDiscriminatorFieldMapping(InheritanceMappingInterface $inheritanceMapping): void
+    {
+        // Check if discriminator field mapping already exists
+        $discriminatorColumn = $inheritanceMapping->getDiscriminatorColumn();
+
+        // Don't add if it already exists
+        foreach ($this->fieldMappings as $fieldMapping) {
+            if ($fieldMapping->getColumnName() === $discriminatorColumn) {
+                return;
+            }
+        }
+
+        // Create a virtual field mapping for the discriminator column
+        $discriminatorFieldMapping = new FieldMapping(
+            fieldName: '__discriminator',
+            columnName: $discriminatorColumn,
+            type: $inheritanceMapping->getDiscriminatorType(),
+            nullable: false,
+            unique: false,
+            length: $inheritanceMapping->getDiscriminatorLength(),
+            precision: null,
+            scale: null,
+            default: null,
+            isIdentifier: false,
+            isGenerated: false,
+            generationStrategy: null,
+            typeRegistry: null
+        );
+
+        $this->fieldMappings['__discriminator'] = $discriminatorFieldMapping;
+    }
+
     private function getReflectionProperty(string $fieldName): ReflectionProperty
     {
+        // Handle discriminator field specially
+        if ($fieldName === '__discriminator') {
+            throw ORMException::metadataNotFound("Discriminator field {$fieldName} is virtual and has no reflection property");
+        }
+
         try {
             return $this->reflectionClass->getProperty($fieldName);
         } catch (\ReflectionException $e) {

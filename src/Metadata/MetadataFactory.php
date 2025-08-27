@@ -5,16 +5,21 @@ declare(strict_types=1);
 namespace Fduarte42\Aurum\Metadata;
 
 use Fduarte42\Aurum\Attribute\Column;
+use Fduarte42\Aurum\Attribute\DiscriminatorColumn;
 use Fduarte42\Aurum\Attribute\Entity;
 use Fduarte42\Aurum\Attribute\Id;
+use Fduarte42\Aurum\Attribute\InheritanceType;
 use Fduarte42\Aurum\Attribute\JoinColumn;
 use Fduarte42\Aurum\Attribute\JoinTable;
 use Fduarte42\Aurum\Attribute\ManyToMany;
 use Fduarte42\Aurum\Attribute\ManyToOne;
 use Fduarte42\Aurum\Attribute\OneToMany;
 use Fduarte42\Aurum\Exception\ORMException;
+use Fduarte42\Aurum\Metadata\InheritanceMapping;
+use Fduarte42\Aurum\Metadata\InheritanceMappingInterface;
 use Fduarte42\Aurum\Type\TypeRegistry;
 use Fduarte42\Aurum\Type\TypeInference;
+use Fduarte42\Aurum\Type\MultiColumnTypeInterface;
 use ReflectionClass;
 use ReflectionProperty;
 
@@ -25,6 +30,9 @@ class MetadataFactory
 {
     /** @var array<string, EntityMetadataInterface> */
     private array $metadataCache = [];
+
+    /** @var array<string, InheritanceMappingInterface> */
+    private array $inheritanceMappingCache = [];
 
     public function __construct(
         private readonly ?TypeRegistry $typeRegistry = null,
@@ -69,11 +77,14 @@ class MetadataFactory
         
         $metadata = new EntityMetadata($className, $tableName);
         
+        // Process inheritance
+        $this->processInheritance($metadata, $reflectionClass);
+
         // Process properties
         foreach ($reflectionClass->getProperties() as $property) {
             $this->processProperty($metadata, $property);
         }
-        
+
         return $metadata;
     }
 
@@ -130,7 +141,7 @@ class MetadataFactory
                 $type = 'string';
             }
 
-            $fieldMapping = new FieldMapping(
+            $fieldMapping = $this->createFieldMapping(
                 fieldName: $fieldName,
                 columnName: $columnAttribute->name ?? $this->getColumnNameFromFieldName($fieldName),
                 type: $type,
@@ -142,8 +153,7 @@ class MetadataFactory
                 default: $columnAttribute->default,
                 isIdentifier: $isIdentifier,
                 isGenerated: $isIdentifier,
-                generationStrategy: $generationStrategy,
-                typeRegistry: $this->typeRegistry
+                generationStrategy: $generationStrategy
             );
 
             $metadata->addFieldMapping($fieldMapping);
@@ -154,7 +164,7 @@ class MetadataFactory
             if ($inferredType !== null) {
                 $inferredOptions = $this->typeInference->inferTypeOptions($property, $inferredType);
 
-                $fieldMapping = new FieldMapping(
+                $fieldMapping = $this->createFieldMapping(
                     fieldName: $fieldName,
                     columnName: $this->getColumnNameFromFieldName($fieldName),
                     type: $inferredType,
@@ -166,8 +176,7 @@ class MetadataFactory
                     default: null,
                     isIdentifier: $isIdentifier,
                     isGenerated: $isIdentifier,
-                    generationStrategy: $generationStrategy,
-                    typeRegistry: $this->typeRegistry
+                    generationStrategy: $generationStrategy
                 );
 
                 $metadata->addFieldMapping($fieldMapping);
@@ -285,5 +294,167 @@ class MetadataFactory
     public function hasMetadata(string $className): bool
     {
         return isset($this->metadataCache[$className]);
+    }
+
+    /**
+     * Create appropriate field mapping based on type requirements
+     */
+    private function createFieldMapping(
+        string $fieldName,
+        string $columnName,
+        string $type,
+        bool $nullable = false,
+        bool $unique = false,
+        ?int $length = null,
+        ?int $precision = null,
+        ?int $scale = null,
+        mixed $default = null,
+        bool $isIdentifier = false,
+        bool $isGenerated = false,
+        ?string $generationStrategy = null
+    ): FieldMappingInterface {
+        // Check if the type requires multi-column storage
+        if ($this->typeRegistry !== null) {
+            $typeInstance = $this->typeRegistry->getType($type);
+            if ($typeInstance instanceof MultiColumnTypeInterface && $typeInstance->requiresMultiColumnStorage()) {
+                // Create multi-column field mapping
+                return new MultiColumnFieldMapping(
+                    fieldName: $fieldName,
+                    baseColumnName: $columnName,
+                    columnPostfixes: $typeInstance->getRequiredColumnPostfixes(),
+                    type: $type,
+                    nullable: $nullable,
+                    unique: $unique,
+                    length: $length,
+                    precision: $precision,
+                    scale: $scale,
+                    default: $default,
+                    isIdentifier: $isIdentifier,
+                    isGenerated: $isGenerated,
+                    generationStrategy: $generationStrategy,
+                    typeRegistry: $this->typeRegistry
+                );
+            }
+        }
+
+        // Create regular single-column field mapping
+        return new FieldMapping(
+            fieldName: $fieldName,
+            columnName: $columnName,
+            type: $type,
+            nullable: $nullable,
+            unique: $unique,
+            length: $length,
+            precision: $precision,
+            scale: $scale,
+            default: $default,
+            isIdentifier: $isIdentifier,
+            isGenerated: $isGenerated,
+            generationStrategy: $generationStrategy,
+            typeRegistry: $this->typeRegistry
+        );
+    }
+
+    /**
+     * Process inheritance for an entity class
+     */
+    private function processInheritance(EntityMetadata $metadata, \ReflectionClass $reflectionClass): void
+    {
+        $className = $reflectionClass->getName();
+
+        // Check if this class has inheritance attributes
+        $inheritanceTypeAttributes = $reflectionClass->getAttributes(InheritanceType::class);
+        $discriminatorColumnAttributes = $reflectionClass->getAttributes(DiscriminatorColumn::class);
+
+        if (!empty($inheritanceTypeAttributes)) {
+            // This is the root class of an inheritance hierarchy
+            $inheritanceType = $inheritanceTypeAttributes[0]->newInstance();
+            $discriminatorColumn = null;
+
+            if (!empty($discriminatorColumnAttributes)) {
+                $discriminatorColumn = $discriminatorColumnAttributes[0]->newInstance();
+            } else {
+                // Use default discriminator column
+                $discriminatorColumn = new DiscriminatorColumn();
+            }
+
+            $inheritanceMapping = new InheritanceMapping(
+                strategy: $inheritanceType->strategy,
+                discriminatorColumn: $discriminatorColumn->name,
+                discriminatorType: $discriminatorColumn->type,
+                discriminatorLength: $discriminatorColumn->length,
+                rootClassName: $className,
+                parentClassName: null
+            );
+
+            $this->inheritanceMappingCache[$className] = $inheritanceMapping;
+            $metadata->setInheritanceMapping($inheritanceMapping);
+
+            // Find and register child classes
+            $this->discoverChildClasses($inheritanceMapping, $className);
+        } else {
+            // Check if this class extends another entity class
+            $parentClass = $reflectionClass->getParentClass();
+            if ($parentClass !== false) {
+                $parentClassName = $parentClass->getName();
+
+                // Check if parent has Entity attribute
+                $parentEntityAttributes = $parentClass->getAttributes(Entity::class);
+                if (!empty($parentEntityAttributes)) {
+                    // This is a child class in an inheritance hierarchy
+                    $rootInheritanceMapping = $this->findRootInheritanceMapping($parentClassName);
+
+                    if ($rootInheritanceMapping !== null) {
+                        // Add this class to the inheritance hierarchy
+                        $rootInheritanceMapping->addChildClass($className);
+
+                        // Create inheritance mapping for this child class
+                        $childInheritanceMapping = new InheritanceMapping(
+                            strategy: $rootInheritanceMapping->getStrategy(),
+                            discriminatorColumn: $rootInheritanceMapping->getDiscriminatorColumn(),
+                            discriminatorType: $rootInheritanceMapping->getDiscriminatorType(),
+                            discriminatorLength: $rootInheritanceMapping->getDiscriminatorLength(),
+                            rootClassName: $rootInheritanceMapping->getRootClassName(),
+                            parentClassName: $parentClassName
+                        );
+
+                        $this->inheritanceMappingCache[$className] = $childInheritanceMapping;
+                        $metadata->setInheritanceMapping($childInheritanceMapping);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Discover child classes for an inheritance hierarchy
+     */
+    private function discoverChildClasses(InheritanceMapping $inheritanceMapping, string $rootClassName): void
+    {
+        // This is a simplified implementation
+        // In a real-world scenario, you might want to scan directories or use a class loader
+        // For now, we'll rely on child classes being loaded when their metadata is requested
+    }
+
+    /**
+     * Find the root inheritance mapping for a class hierarchy
+     */
+    private function findRootInheritanceMapping(string $className): ?InheritanceMapping
+    {
+        // Check if we already have the inheritance mapping cached
+        if (isset($this->inheritanceMappingCache[$className])) {
+            $mapping = $this->inheritanceMappingCache[$className];
+            if ($mapping instanceof InheritanceMapping) {
+                return $mapping->isRootClass() ? $mapping : $this->findRootInheritanceMapping($mapping->getRootClassName());
+            }
+        }
+
+        // Load metadata for the class to trigger inheritance processing
+        try {
+            $this->getMetadataFor($className);
+            return $this->inheritanceMappingCache[$className] ?? null;
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 }

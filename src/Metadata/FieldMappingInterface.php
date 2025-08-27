@@ -15,9 +15,23 @@ interface FieldMappingInterface
     public function getFieldName(): string;
 
     /**
-     * Get the column name
+     * Get the column name (for single-column mappings)
      */
     public function getColumnName(): string;
+
+    /**
+     * Get all column names for this field mapping
+     * For single-column mappings, returns array with one element
+     * For multi-column mappings, returns array with multiple elements
+     *
+     * @return array<string>
+     */
+    public function getColumnNames(): array;
+
+    /**
+     * Check if this is a multi-column field mapping
+     */
+    public function isMultiColumn(): bool;
 
     /**
      * Get the field type

@@ -8,15 +8,17 @@ use Fduarte42\Aurum\Type\TypeInterface;
 use Fduarte42\Aurum\Type\TypeRegistry;
 
 /**
- * Field mapping implementation
+ * Multi-column field mapping implementation
  */
-class FieldMapping implements FieldMappingInterface
+class MultiColumnFieldMapping implements MultiColumnFieldMappingInterface
 {
     private readonly TypeInterface $typeInstance;
+    private array $columnNamesWithPostfixes;
 
     public function __construct(
         private readonly string $fieldName,
-        private readonly string $columnName,
+        private readonly string $baseColumnName,
+        private readonly array $columnPostfixes,
         private readonly string $type,
         private readonly bool $nullable = false,
         private readonly bool $unique = false,
@@ -30,6 +32,12 @@ class FieldMapping implements FieldMappingInterface
         private readonly ?TypeRegistry $typeRegistry = null
     ) {
         $this->typeInstance = $this->typeRegistry?->getType($this->type) ?? $this->createFallbackType();
+        
+        // Build column names with postfixes
+        $this->columnNamesWithPostfixes = [];
+        foreach ($this->columnPostfixes as $postfix) {
+            $this->columnNamesWithPostfixes[$postfix] = $this->baseColumnName . $postfix;
+        }
     }
 
     public function getFieldName(): string
@@ -39,17 +47,33 @@ class FieldMapping implements FieldMappingInterface
 
     public function getColumnName(): string
     {
-        return $this->columnName;
+        // Return the first column name for backward compatibility
+        return reset($this->columnNamesWithPostfixes) ?: $this->baseColumnName;
     }
 
     public function getColumnNames(): array
     {
-        return [$this->columnName];
+        return array_values($this->columnNamesWithPostfixes);
     }
 
     public function isMultiColumn(): bool
     {
-        return false;
+        return true;
+    }
+
+    public function getColumnNamesWithPostfixes(): array
+    {
+        return $this->columnNamesWithPostfixes;
+    }
+
+    public function getBaseColumnName(): string
+    {
+        return $this->baseColumnName;
+    }
+
+    public function getColumnPostfixes(): array
+    {
+        return $this->columnPostfixes;
     }
 
     public function getType(): string
@@ -117,6 +141,56 @@ class FieldMapping implements FieldMappingInterface
         return $this->typeInstance->convertToDatabaseValue($value);
     }
 
+    public function convertToMultipleDatabaseValues(mixed $value): array
+    {
+        // Delegate to the type instance if it supports multi-column conversion
+        if (method_exists($this->typeInstance, 'convertToMultipleDatabaseValues')) {
+            return $this->typeInstance->convertToMultipleDatabaseValues($value);
+        }
+
+        // Fallback: convert to single value and replicate across all columns
+        $dbValue = $this->convertToDatabaseValue($value);
+        $result = [];
+        foreach ($this->columnPostfixes as $postfix) {
+            $result[$postfix] = $dbValue;
+        }
+        return $result;
+    }
+
+    public function convertFromMultipleDatabaseValues(array $values): mixed
+    {
+        // Delegate to the type instance if it supports multi-column conversion
+        if (method_exists($this->typeInstance, 'convertFromMultipleDatabaseValues')) {
+            return $this->typeInstance->convertFromMultipleDatabaseValues($values);
+        }
+
+        // Fallback: use the first non-null value
+        foreach ($values as $value) {
+            if ($value !== null) {
+                return $this->convertToPHPValue($value);
+            }
+        }
+        return null;
+    }
+
+    public function getMultiColumnSQLDeclarations(): array
+    {
+        $declarations = [];
+        
+        // If the type supports multi-column SQL declarations, use that
+        if (method_exists($this->typeInstance, 'getMultiColumnSQLDeclarations')) {
+            return $this->typeInstance->getMultiColumnSQLDeclarations($this->columnPostfixes);
+        }
+
+        // Fallback: use the same SQL declaration for all columns
+        $sqlDeclaration = $this->getSQLDeclaration();
+        foreach ($this->columnPostfixes as $postfix) {
+            $declarations[$postfix] = $sqlDeclaration;
+        }
+        
+        return $declarations;
+    }
+
     /**
      * Get the type instance for this field
      */
@@ -126,7 +200,7 @@ class FieldMapping implements FieldMappingInterface
     }
 
     /**
-     * Get SQL declaration for this field
+     * Get SQL declaration for this field (single column fallback)
      */
     public function getSQLDeclaration(): string
     {
