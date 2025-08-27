@@ -72,14 +72,14 @@ class QueryResultRefactoringTest extends TestCase
         $this->entityManager->flush();
         $this->entityManager->commit();
 
-        // Test getArrayResult() returns PDOStatement with raw data
+        // Test getArrayResult() returns Iterator with raw data
         $qb = $this->entityManager->getRepository(Todo::class)->createQueryBuilder('t');
-        $statement = $qb->getArrayResult();
-        
-        $this->assertInstanceOf(\PDOStatement::class, $statement);
-        
+        $iterator = $qb->getArrayResult();
+
+        $this->assertInstanceOf(\Iterator::class, $iterator);
+
         $results = [];
-        foreach ($statement as $row) {
+        foreach ($iterator as $row) {
             $results[] = $row;
         }
         
@@ -99,13 +99,20 @@ class QueryResultRefactoringTest extends TestCase
 
         // Test getResult() returns detached entity objects
         $qb = $this->entityManager->getRepository(Todo::class)->createQueryBuilder('t');
-        $entities = $qb->getResult();
-        
-        $this->assertIsArray($entities);
+        $entityIterator = $qb->getResult();
+
+        $this->assertInstanceOf(\Iterator::class, $entityIterator);
+
+        // Convert iterator to array for testing
+        $entities = [];
+        foreach ($entityIterator as $entity) {
+            $entities[] = $entity;
+        }
+
         $this->assertCount(1, $entities);
         $this->assertInstanceOf(Todo::class, $entities[0]);
         $this->assertStringStartsWith('Detached Todo', $entities[0]->getTitle());
-        
+
         // Verify entities are NOT managed by UnitOfWork
         $this->assertFalse($this->entityManager->contains($entities[0]));
         
@@ -137,14 +144,19 @@ class QueryResultRefactoringTest extends TestCase
 
         // Test Repository methods return managed entities
         $repository = $this->entityManager->getRepository(Todo::class);
-        $entities = $repository->findAll();
-        
+        $entityIterator = $repository->findAll();
+
+        // Convert iterator to array for testing
+        $entities = [];
+        foreach ($entityIterator as $entity) {
+            $entities[] = $entity;
+            // Verify entities ARE managed by UnitOfWork
+            $this->assertTrue($this->entityManager->contains($entity));
+        }
+
         $this->assertCount(1, $entities);
         $this->assertInstanceOf(Todo::class, $entities[0]);
         $this->assertStringStartsWith('Managed Todo', $entities[0]->getTitle());
-        
-        // Verify entities ARE managed by UnitOfWork
-        $this->assertTrue($this->entityManager->contains($entities[0]));
         
         // Modify the managed entity - changes should be tracked
         $entities[0]->title = 'Modified Managed Title';
@@ -171,8 +183,14 @@ class QueryResultRefactoringTest extends TestCase
 
         // Get detached entities using QueryBuilder
         $qb = $this->entityManager->getRepository(Todo::class)->createQueryBuilder('t');
-        $detachedEntities = $qb->getResult();
-        
+        $entityIterator = $qb->getResult();
+
+        // Convert iterator to array for testing
+        $detachedEntities = [];
+        foreach ($entityIterator as $entity) {
+            $detachedEntities[] = $entity;
+        }
+
         $this->assertCount(1, $detachedEntities);
         $detachedTodo = $detachedEntities[0];
         
@@ -222,14 +240,18 @@ class QueryResultRefactoringTest extends TestCase
 
         // Scenario 1: Read-only access with detached entities
         $qb = $this->entityManager->getRepository(Todo::class)->createQueryBuilder('t');
-        $readOnlyTodos = $qb->where('t.title LIKE :pattern')
+        $entityIterator = $qb->where('t.title LIKE :pattern')
                            ->setParameter('pattern', 'Todo%')
                            ->getResult();
-        
-        $this->assertCount(3, $readOnlyTodos);
-        foreach ($readOnlyTodos as $todo) {
+
+        // Convert iterator to array for testing
+        $readOnlyTodos = [];
+        foreach ($entityIterator as $todo) {
+            $readOnlyTodos[] = $todo;
             $this->assertFalse($this->entityManager->contains($todo));
         }
+
+        $this->assertCount(3, $readOnlyTodos);
 
         // Scenario 2: Selective attachment for modification
         $todoToModify = $readOnlyTodos[0];
@@ -242,13 +264,17 @@ class QueryResultRefactoringTest extends TestCase
         
         // Scenario 3: Traditional repository usage (managed entities)
         $this->entityManager->clear();
-        $managedTodos = $this->entityManager->getRepository(Todo::class)->findAll();
-        
-        $this->assertCount(3, $managedTodos);
-        foreach ($managedTodos as $todo) {
+        $managedTodoIterator = $this->entityManager->getRepository(Todo::class)->findAll();
+
+        // Convert iterator to array for testing
+        $managedTodos = [];
+        foreach ($managedTodoIterator as $todo) {
+            $managedTodos[] = $todo;
             $this->assertTrue($this->entityManager->contains($todo));
         }
-        
+
+        $this->assertCount(3, $managedTodos);
+
         // Verify the modification was persisted
         $modifiedTodo = array_filter($managedTodos, fn($t) => $t->getTitle() === 'Modified Todo 1');
         $this->assertCount(1, $modifiedTodo);

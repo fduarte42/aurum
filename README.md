@@ -438,11 +438,16 @@ $qb = $todoRepo->createQueryBuilder('t')
     ->setParameter('email', 'john@example.com')
     ->setParameter('minPriority', '5.00');
 
-// Get raw array data (PDOStatement iterator)
-$statement = $qb->getArrayResult();
+// Get raw array data (Iterator over arrays)
+$arrayIterator = $qb->getArrayResult();
 
-// Or get hydrated entity objects (detached/unmanaged)
-$todos = $qb->getResult();
+// Or get hydrated entity objects (detached/unmanaged iterator)
+$todoIterator = $qb->getResult();
+
+// Iterate over entities (memory efficient)
+foreach ($todoIterator as $todo) {
+    echo $todo->getTitle() . "\n";
+}
 ```
 
 ### Lazy Loading with Proxies
@@ -464,23 +469,67 @@ $name = $userRef->getName(); // Triggers lazy loading
 
 class TodoRepository extends Repository
 {
-    public function findHighPriorityTodos(Decimal $minPriority): array
+    // Memory-efficient iterator methods (default)
+    public function findHighPriorityTodos(Decimal $minPriority): \Iterator
     {
-        return $this->findBy(['priority' => ['>=', $minPriority]]);
+        return $this->findByRange('priority', $minPriority, PHP_FLOAT_MAX);
     }
 
-    public function findCompletedTodosForUser(User $user): array
+    public function findCompletedTodosForUser(User $user): \Iterator
     {
-        $qb = $this->createQueryBuilder('t')
-            ->where('t.user_id = :userId')
-            ->andWhere('t.completed = :completed')
-            ->setParameter('userId', $user->getId())
-            ->setParameter('completed', true);
+        return $this->findBy([
+            'user_id' => $user->getId(),
+            'completed' => true
+        ]);
+    }
 
-        return $this->hydrateResults($qb->getArrayResult());
+    // Convenience methods for backward compatibility
+    public function findHighPriorityTodosAsArray(Decimal $minPriority): array
+    {
+        return iterator_to_array($this->findHighPriorityTodos($minPriority));
+    }
+
+    public function findCompletedTodosForUserAsArray(User $user): array
+    {
+        return iterator_to_array($this->findCompletedTodosForUser($user));
     }
 }
 ```
+
+### Memory-Efficient Repository Iterators
+
+Repository methods now return iterators by default for memory efficiency with large result sets:
+
+```php
+// Memory-efficient iteration (entities loaded one at a time)
+foreach ($repository->findAll() as $todo) {
+    echo $todo->getTitle() . "\n";
+    // Only one entity in memory at a time
+}
+
+// Convert to array if needed (loads all into memory)
+$allTodos = $repository->findAllAsArray();
+
+// Or use iterator_to_array()
+$allTodos = iterator_to_array($repository->findAll());
+```
+
+**Iterator Methods** (memory-efficient):
+- `findAll()` → `\Iterator`
+- `findBy()` → `\Iterator`
+- `findBySql()` → `\Iterator`
+- `findByLike()` → `\Iterator`
+- `findByRange()` → `\Iterator`
+
+**Array Convenience Methods** (backward compatibility):
+- `findAllAsArray()` → `array`
+- `findByAsArray()` → `array`
+- `findBySqlAsArray()` → `array`
+
+**Single Entity Methods** (unchanged):
+- `find()` → `object|null`
+- `findOneBy()` → `object|null`
+- `findOneBySql()` → `object|null`
 
 ## Dependency Injection Integration
 

@@ -86,14 +86,15 @@ class Repository implements RepositoryInterface
         return $this->entityManager->find($this->className, $id);
     }
 
-    public function findAll(): array
+    public function findAll(): \Iterator
     {
         $this->ensureDependenciesInjected();
         $qb = $this->createQueryBuilder('e');
-        return $this->hydrateResults($qb->getArrayResult());
+        $sourceIterator = $qb->getArrayResult();
+        return new ManagedEntityIterator($sourceIterator, $this, $this->entityManager);
     }
 
-    public function findBy(array $criteria, ?array $orderBy = null, ?int $limit = null, ?int $offset = null): array
+    public function findBy(array $criteria, ?array $orderBy = null, ?int $limit = null, ?int $offset = null): \Iterator
     {
         $this->ensureDependenciesInjected();
         $qb = $this->createQueryBuilder('e');
@@ -114,13 +115,17 @@ class Repository implements RepositoryInterface
             $qb->setFirstResult($offset);
         }
 
-        return $this->hydrateResults($qb->getArrayResult());
+        $sourceIterator = $qb->getArrayResult();
+        return new ManagedEntityIterator($sourceIterator, $this, $this->entityManager);
     }
 
     public function findOneBy(array $criteria, ?array $orderBy = null): ?object
     {
-        $results = $this->findBy($criteria, $orderBy, 1);
-        return $results[0] ?? null;
+        $iterator = $this->findBy($criteria, $orderBy, 1);
+        foreach ($iterator as $entity) {
+            return $entity; // Return the first (and only) entity
+        }
+        return null;
     }
 
     public function count(array $criteria = []): int
@@ -167,11 +172,12 @@ class Repository implements RepositoryInterface
         return $this->className;
     }
 
-    public function findBySql(string $sql, array $parameters = []): array
+    public function findBySql(string $sql, array $parameters = []): \Iterator
     {
         $this->ensureDependenciesInjected();
         $results = $this->entityManager->getConnection()->fetchAll($sql, $parameters);
-        return $this->hydrateResults($results);
+        $sourceIterator = new \ArrayIterator($results);
+        return new ManagedEntityIterator($sourceIterator, $this, $this->entityManager);
     }
 
     public function findOneBySql(string $sql, array $parameters = []): ?object
@@ -209,18 +215,34 @@ class Repository implements RepositoryInterface
     /**
      * Find entities with pagination
      */
-    public function findWithPagination(array $criteria = [], ?array $orderBy = null, int $page = 1, int $pageSize = 20): array
+    public function findWithPagination(array $criteria = [], ?array $orderBy = null, int $page = 1, int $pageSize = 20): \Iterator
     {
         $offset = ($page - 1) * $pageSize;
         return $this->findBy($criteria, $orderBy, $pageSize, $offset);
     }
 
     /**
+     * Find entities with pagination as array (convenience method for backward compatibility)
+     */
+    public function findWithPaginationAsArray(array $criteria = [], ?array $orderBy = null, int $page = 1, int $pageSize = 20): array
+    {
+        return iterator_to_array($this->findWithPagination($criteria, $orderBy, $page, $pageSize));
+    }
+
+    /**
      * Find entities by a single field value
      */
-    public function findByField(string $field, mixed $value): array
+    public function findByField(string $field, mixed $value): \Iterator
     {
         return $this->findBy([$field => $value]);
+    }
+
+    /**
+     * Find entities by a single field value as array (convenience method for backward compatibility)
+     */
+    public function findByFieldAsArray(string $field, mixed $value): array
+    {
+        return iterator_to_array($this->findByField($field, $value));
     }
 
     /**
@@ -242,26 +264,28 @@ class Repository implements RepositoryInterface
     /**
      * Find entities with LIKE condition
      */
-    public function findByLike(string $field, string $pattern): array
+    public function findByLike(string $field, string $pattern): \Iterator
     {
         $qb = $this->createQueryBuilder('e')
             ->where("e.{$field} LIKE :pattern")
             ->setParameter('pattern', $pattern);
 
-        return $this->hydrateResults($qb->getArrayResult());
+        $sourceIterator = $qb->getArrayResult();
+        return new ManagedEntityIterator($sourceIterator, $this, $this->entityManager);
     }
 
     /**
      * Find entities within a range
      */
-    public function findByRange(string $field, mixed $min, mixed $max): array
+    public function findByRange(string $field, mixed $min, mixed $max): \Iterator
     {
         $qb = $this->createQueryBuilder('e')
             ->where("e.{$field} BETWEEN :min AND :max")
             ->setParameter('min', $min)
             ->setParameter('max', $max);
 
-        return $this->hydrateResults($qb->getArrayResult());
+        $sourceIterator = $qb->getArrayResult();
+        return new ManagedEntityIterator($sourceIterator, $this, $this->entityManager);
     }
 
     /**
@@ -323,7 +347,7 @@ class Repository implements RepositoryInterface
     /**
      * Hydrate a single database result into an entity
      */
-    private function hydrateEntity(array $data): object
+    public function hydrateEntity(array $data): object
     {
         $this->ensureDependenciesInjected();
 
@@ -375,5 +399,45 @@ class Repository implements RepositoryInterface
         }
 
         return $entity;
+    }
+
+    /**
+     * Find all entities as array (convenience method for backward compatibility)
+     */
+    public function findAllAsArray(): array
+    {
+        return iterator_to_array($this->findAll());
+    }
+
+    /**
+     * Find entities by criteria as array (convenience method for backward compatibility)
+     */
+    public function findByAsArray(array $criteria, ?array $orderBy = null, ?int $limit = null, ?int $offset = null): array
+    {
+        return iterator_to_array($this->findBy($criteria, $orderBy, $limit, $offset));
+    }
+
+    /**
+     * Execute a custom SQL query and return results as array (convenience method for backward compatibility)
+     */
+    public function findBySqlAsArray(string $sql, array $parameters = []): array
+    {
+        return iterator_to_array($this->findBySql($sql, $parameters));
+    }
+
+    /**
+     * Find entities with LIKE condition as array (convenience method for backward compatibility)
+     */
+    public function findByLikeAsArray(string $field, string $pattern): array
+    {
+        return iterator_to_array($this->findByLike($field, $pattern));
+    }
+
+    /**
+     * Find entities within a range as array (convenience method for backward compatibility)
+     */
+    public function findByRangeAsArray(string $field, mixed $min, mixed $max): array
+    {
+        return iterator_to_array($this->findByRange($field, $min, $max));
     }
 }

@@ -24,9 +24,9 @@ interface RepositoryInterface
     /**
      * Find all entities
      *
-     * @return array<T>
+     * @return \Iterator<T>
      */
-    public function findAll(): array;
+    public function findAll(): \Iterator;
 
     /**
      * Find entities by criteria
@@ -35,9 +35,9 @@ interface RepositoryInterface
      * @param array<string, string>|null $orderBy
      * @param int|null $limit
      * @param int|null $offset
-     * @return array<T>
+     * @return \Iterator<T>
      */
-    public function findBy(array $criteria, ?array $orderBy = null, ?int $limit = null, ?int $offset = null): array;
+    public function findBy(array $criteria, ?array $orderBy = null, ?int $limit = null, ?int $offset = null): \Iterator;
 
     /**
      * Find one entity by criteria
@@ -72,9 +72,9 @@ interface RepositoryInterface
      *
      * @param string $sql
      * @param array<string, mixed> $parameters
-     * @return array<T>
+     * @return \Iterator<T>
      */
-    public function findBySql(string $sql, array $parameters = []): array;
+    public function findBySql(string $sql, array $parameters = []): \Iterator;
 
     /**
      * Execute a custom SQL query and return one result
@@ -84,4 +84,50 @@ interface RepositoryInterface
      * @return T|null
      */
     public function findOneBySql(string $sql, array $parameters = []): ?object;
+
+    /**
+     * Find entities with LIKE condition
+     *
+     * @param string $field
+     * @param string $pattern
+     * @return \Iterator<T>
+     */
+    public function findByLike(string $field, string $pattern): \Iterator;
+
+    /**
+     * Find entities within a range
+     *
+     * @param string $field
+     * @param mixed $min
+     * @param mixed $max
+     * @return \Iterator<T>
+     */
+    public function findByRange(string $field, mixed $min, mixed $max): \Iterator;
+
+    /**
+     * Find all entities as array (convenience method for backward compatibility)
+     *
+     * @return array<T>
+     */
+    public function findAllAsArray(): array;
+
+    /**
+     * Find entities by criteria as array (convenience method for backward compatibility)
+     *
+     * @param array<string, mixed> $criteria
+     * @param array<string, string>|null $orderBy
+     * @param int|null $limit
+     * @param int|null $offset
+     * @return array<T>
+     */
+    public function findByAsArray(array $criteria, ?array $orderBy = null, ?int $limit = null, ?int $offset = null): array;
+
+    /**
+     * Execute a custom SQL query and return results as array (convenience method for backward compatibility)
+     *
+     * @param string $sql
+     * @param array<string, mixed> $parameters
+     * @return array<T>
+     */
+    public function findBySqlAsArray(string $sql, array $parameters = []): array;
 }

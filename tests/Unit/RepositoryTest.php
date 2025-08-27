@@ -87,10 +87,10 @@ class RepositoryTest extends TestCase
         });
         
         // Test pagination
-        $page1 = $this->todoRepository->findWithPagination([], null, 1, 3);
+        $page1 = $this->todoRepository->findWithPaginationAsArray([], null, 1, 3);
         $this->assertCount(3, $page1);
-        
-        $page2 = $this->todoRepository->findWithPagination([], null, 2, 3);
+
+        $page2 = $this->todoRepository->findWithPaginationAsArray([], null, 2, 3);
         $this->assertCount(3, $page2);
         
         $page4 = $this->todoRepository->findWithPagination([], null, 4, 3);
@@ -108,7 +108,7 @@ class RepositoryTest extends TestCase
             $this->todoRepository->save($todo2);
         });
 
-        $completedTodos = $this->todoRepository->findByField('completed', true);
+        $completedTodos = $this->todoRepository->findByFieldAsArray('completed', true);
         $this->assertCount(1, $completedTodos);
         $this->assertEquals('Completed Todo', $completedTodos[0]->getTitle());
     }
@@ -151,7 +151,7 @@ class RepositoryTest extends TestCase
             $this->todoRepository->save($todo3);
         });
 
-        $buyTodos = $this->todoRepository->findByLike('title', 'Buy%');
+        $buyTodos = $this->todoRepository->findByLikeAsArray('title', 'Buy%');
         $this->assertCount(2, $buyTodos);
     }
 
@@ -172,7 +172,7 @@ class RepositoryTest extends TestCase
             $this->todoRepository->save($todo3);
         });
 
-        $mediumTodos = $this->todoRepository->findByRange('priority', '3.0', '7.0');
+        $mediumTodos = $this->todoRepository->findByRangeAsArray('priority', '3.0', '7.0');
         $this->assertCount(1, $mediumTodos);
         $this->assertEquals('Medium Priority', $mediumTodos[0]->getTitle());
     }
@@ -184,11 +184,11 @@ class RepositoryTest extends TestCase
             $this->todoRepository->save($todo);
         });
         
-        $results = $this->todoRepository->findBySql(
+        $results = $this->todoRepository->findBySqlAsArray(
             'SELECT * FROM todos WHERE title = ?',
             ['SQL Todo']
         );
-        
+
         $this->assertCount(1, $results);
         $this->assertEquals('SQL Todo', $results[0]->getTitle());
     }
@@ -228,7 +228,7 @@ class RepositoryTest extends TestCase
             $this->todoRepository->save($todo3);
         });
 
-        $todos = $this->todoRepository->findBy([], ['title' => 'ASC']);
+        $todos = $this->todoRepository->findByAsArray([], ['title' => 'ASC']);
         $this->assertEquals('A Todo', $todos[0]->getTitle());
         $this->assertEquals('B Todo', $todos[1]->getTitle());
         $this->assertEquals('C Todo', $todos[2]->getTitle());
@@ -243,7 +243,7 @@ class RepositoryTest extends TestCase
             }
         });
 
-        $todos = $this->todoRepository->findBy([], null, 2, 1);
+        $todos = $this->todoRepository->findByAsArray([], null, 2, 1);
         $this->assertCount(2, $todos);
     }
 
@@ -263,7 +263,7 @@ class RepositoryTest extends TestCase
         });
         
         // Test with array values (IN clause) - use database values directly
-        $completedTodos = $this->todoRepository->findBy(['completed' => [1]]);
+        $completedTodos = $this->todoRepository->findByAsArray(['completed' => [1]]);
         $this->assertCount(2, $completedTodos);
     }
 
@@ -277,7 +277,7 @@ class RepositoryTest extends TestCase
             $this->todoRepository->save($todo2);
         });
 
-        $todosWithoutDescription = $this->todoRepository->findBy(['description' => null]);
+        $todosWithoutDescription = $this->todoRepository->findByAsArray(['description' => null]);
         $this->assertCount(1, $todosWithoutDescription);
         $this->assertEquals('Todo without description', $todosWithoutDescription[0]->getTitle());
     }
@@ -307,7 +307,7 @@ class RepositoryTest extends TestCase
             $this->todoRepository->save($todo2);
         });
 
-        $todos = $this->todoRepository->findBy([], ['title' => 'ASC']);
+        $todos = $this->todoRepository->findByAsArray([], ['title' => 'ASC']);
         $this->assertEquals('A Todo', $todos[0]->getTitle());
         $this->assertEquals('Z Todo', $todos[1]->getTitle());
     }
@@ -321,7 +321,7 @@ class RepositoryTest extends TestCase
             }
         });
 
-        $todos = $this->todoRepository->findBy([], null, 3);
+        $todos = $this->todoRepository->findByAsArray([], null, 3);
         $this->assertCount(3, $todos);
     }
 
@@ -334,7 +334,7 @@ class RepositoryTest extends TestCase
             }
         });
 
-        $todos = $this->todoRepository->findBy([], null, 2, 2);
+        $todos = $this->todoRepository->findByAsArray([], null, 2, 2);
         $this->assertCount(2, $todos);
     }
 
@@ -361,7 +361,7 @@ class RepositoryTest extends TestCase
         });
 
         // Test multiple criteria - use PHP values
-        $todos = $this->todoRepository->findBy([
+        $todos = $this->todoRepository->findByAsArray([
             'completed' => true,  // Use PHP boolean value
             'priority' => BigDecimal::of('5.0')  // Use BigDecimal object
         ]);

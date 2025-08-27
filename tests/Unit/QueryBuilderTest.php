@@ -277,18 +277,18 @@ class QueryBuilderTest extends TestCase
         $connection->execute('INSERT INTO test_table VALUES (1, "test1")');
         $connection->execute('INSERT INTO test_table VALUES (2, "test2")');
 
-        $statement = $this->queryBuilder
+        $iterator = $this->queryBuilder
             ->select('*')
             ->from('test_table', 't')
             ->orderBy('t.id')
             ->getArrayResult();
 
-        // Test that we get a PDOStatement
-        $this->assertInstanceOf(\PDOStatement::class, $statement);
+        // Test that we get an Iterator
+        $this->assertInstanceOf(\Iterator::class, $iterator);
 
-        // Test iteration over the statement (fetch mode already set to ASSOC)
+        // Test iteration over the iterator (fetch mode already set to ASSOC)
         $results = [];
-        foreach ($statement as $row) {
+        foreach ($iterator as $row) {
             $results[] = $row;
         }
 

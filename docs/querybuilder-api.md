@@ -123,47 +123,51 @@ $qb->from(User::class, 'u')->innerJoin('u.roles', 'r');
 
 ## Query Execution Methods
 
-### `getArrayResult(): \PDOStatement`
+### `getArrayResult(): \Iterator`
 
-Execute the query and return a PDOStatement iterator for efficient iteration over database results without loading all records into memory at once. The fetch mode is automatically set to `PDO::FETCH_ASSOC`.
+Execute the query and return an Iterator for efficient iteration over database results without loading all records into memory at once. The fetch mode is automatically set to `PDO::FETCH_ASSOC`.
 
 ```php
-$statement = $qb->from(User::class, 'u')
-                ->innerJoin('u.roles', 'r')
-                ->where('r.name = :role')
-                ->setParameter('role', 'admin')
-                ->getArrayResult();
+$iterator = $qb->from(User::class, 'u')
+               ->innerJoin('u.roles', 'r')
+               ->where('r.name = :role')
+               ->setParameter('role', 'admin')
+               ->getArrayResult();
 
 // Iterate efficiently over results (fetch mode already set to ASSOC)
-foreach ($statement as $row) {
+foreach ($iterator as $row) {
     // Process each row without loading all into memory
     echo "User: {$row['name']}\n";
 }
 ```
 
-### `getResult(): array<object>`
+### `getResult(): \Iterator<object>`
 
-Execute the query and return hydrated entity objects. The returned entities are **detached** (not tracked by any UnitOfWork), providing read-only access by default. Use `EntityManager::manage()` to attach entities for change tracking if needed.
+Execute the query and return a lazy iterator that yields hydrated entity objects one at a time. The returned entities are **detached** (not tracked by any UnitOfWork), providing read-only access by default. The iterator provides memory efficiency by hydrating entities on-demand rather than loading all results into memory at once.
 
 ```php
-$users = $qb->from(User::class, 'u')
-            ->innerJoin('u.roles', 'r')
-            ->where('r.name = :role')
-            ->setParameter('role', 'admin')
-            ->getResult();
+$userIterator = $qb->from(User::class, 'u')
+                   ->innerJoin('u.roles', 'r')
+                   ->where('r.name = :role')
+                   ->setParameter('role', 'admin')
+                   ->getResult();
 
-// Returns array of User entity objects (detached)
-foreach ($users as $user) {
+// Returns iterator that yields User entity objects (detached)
+foreach ($userIterator as $user) {
     echo "User: {$user->getName()}\n";
     // $user is not tracked for changes
+    // Only one entity is in memory at a time
 }
 
 // To make entities trackable for changes:
-foreach ($users as $user) {
+foreach ($userIterator as $user) {
     $managedUser = $entityManager->manage($user);
     $managedUser->setName('Updated Name');
     // Now changes will be tracked
 }
+
+// Convert to array if needed (loads all into memory)
+$users = iterator_to_array($userIterator);
 ```
 
 ### `getOneOrNullResult(): ?object`

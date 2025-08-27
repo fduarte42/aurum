@@ -221,14 +221,19 @@ $entityManager->flush();
 Use the QueryBuilder to easily query across Many-to-Many relationships:
 
 ```php
-// Find all users with admin role
-$adminUsers = $entityManager->createQueryBuilder('u')
+// Find all users with admin role (returns iterator)
+$adminUserIterator = $entityManager->createQueryBuilder('u')
     ->select('u', 'r')
     ->from(User::class, 'u')
     ->innerJoin('u.roles', 'r')  // Automatic junction table join!
     ->where('r.name = :role')
     ->setParameter('role', 'admin')
     ->getResult();
+
+// Iterate over results (memory efficient)
+foreach ($adminUserIterator as $user) {
+    echo "Admin user: {$user->getName()}\n";
+}
 
 // Find all roles for active users
 $activeRoles = $entityManager->createQueryBuilder('r')
@@ -279,20 +284,24 @@ use Fduarte42\Aurum\Repository\Repository;
 
 class UserRepository extends Repository
 {
-    public function findActiveUsers(): array
+    public function findActiveUsers(): \Iterator
     {
-        return $this->createQueryBuilder('u')
-            ->where('u.active = :active')
-            ->setParameter('active', true)
-            ->getResult();
+        return $this->findBy(['active' => true]);
     }
 
-    public function findByEmailDomain(string $domain): array
+    public function findActiveUsersAsArray(): array
     {
-        return $this->createQueryBuilder('u')
-            ->where('u.email LIKE :domain')
-            ->setParameter('domain', '%@' . $domain)
-            ->getResult();
+        return $this->findByAsArray(['active' => true]);
+    }
+
+    public function findByEmailDomain(string $domain): \Iterator
+    {
+        return $this->findByLike('email', '%@' . $domain);
+    }
+
+    public function findByEmailDomainAsArray(string $domain): array
+    {
+        return $this->findByLikeAsArray('email', '%@' . $domain);
     }
 }
 ```

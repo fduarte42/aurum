@@ -12,7 +12,7 @@ use PDOStatement;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Test PDOStatement iterator functionality in QueryBuilder
+ * Test Iterator functionality in QueryBuilder
  */
 class QueryBuilderPDOStatementTest extends TestCase
 {
@@ -26,7 +26,7 @@ class QueryBuilderPDOStatementTest extends TestCase
         $this->queryBuilder = new QueryBuilder($connection);
     }
 
-    public function testGetArrayResultReturnsPDOStatement(): void
+    public function testGetArrayResultReturnsIterator(): void
     {
         // Create test table and data
         $connection = $this->queryBuilder->getConnection();
@@ -34,16 +34,16 @@ class QueryBuilderPDOStatementTest extends TestCase
         $connection->execute('INSERT INTO test_table VALUES (1, "first", 10.5)');
         $connection->execute('INSERT INTO test_table VALUES (2, "second", 20.7)');
 
-        $statement = $this->queryBuilder
+        $iterator = $this->queryBuilder
             ->select('*')
             ->from('test_table', 't')
             ->orderBy('t.id')
             ->getArrayResult();
 
-        $this->assertInstanceOf(PDOStatement::class, $statement);
+        $this->assertInstanceOf(\Iterator::class, $iterator);
     }
 
-    public function testPDOStatementIteratorFunctionality(): void
+    public function testIteratorFunctionality(): void
     {
         // Create test table and data
         $connection = $this->queryBuilder->getConnection();
@@ -52,15 +52,15 @@ class QueryBuilderPDOStatementTest extends TestCase
         $connection->execute('INSERT INTO test_table VALUES (2, "second", 20.7)');
         $connection->execute('INSERT INTO test_table VALUES (3, "third", 30.9)');
 
-        $statement = $this->queryBuilder
+        $iterator = $this->queryBuilder
             ->select('*')
             ->from('test_table', 't')
             ->orderBy('t.id')
             ->getArrayResult();
 
-        // Test iteration over PDOStatement (fetch mode already set to ASSOC)
+        // Test iteration over Iterator (fetch mode already set to ASSOC)
         $results = [];
-        foreach ($statement as $row) {
+        foreach ($iterator as $row) {
             $results[] = $row;
         }
 
@@ -70,71 +70,64 @@ class QueryBuilderPDOStatementTest extends TestCase
         $this->assertEquals(['id' => 3, 'name' => 'third', 'value' => 30.9], $results[2]);
     }
 
-    public function testPDOStatementWithDifferentFetchModes(): void
+    public function testIteratorWithAssociativeArrays(): void
     {
         // Create test table and data
         $connection = $this->queryBuilder->getConnection();
         $connection->execute('CREATE TABLE test_table (id INTEGER, name TEXT)');
         $connection->execute('INSERT INTO test_table VALUES (1, "test")');
 
-        $statement = $this->queryBuilder
+        $iterator = $this->queryBuilder
             ->select('*')
             ->from('test_table', 't')
             ->getArrayResult();
 
-        // Test default FETCH_ASSOC (already set)
-        $row = $statement->fetch();
-        $this->assertEquals(['id' => 1, 'name' => 'test'], $row);
-
-        // Reset for next test
-        $this->queryBuilder->reset();
-        $statement2 = $this->queryBuilder
-            ->select('*')
-            ->from('test_table', 't')
-            ->getArrayResult();
-
-        // Test FETCH_NUM
-        $statement2->setFetchMode(PDO::FETCH_NUM);
-        $row2 = $statement2->fetch();
-        $this->assertEquals([1, 'test'], $row2);
+        // Test that iterator returns associative arrays (FETCH_ASSOC is set by default)
+        foreach ($iterator as $row) {
+            $this->assertEquals(['id' => 1, 'name' => 'test'], $row);
+            $this->assertIsArray($row);
+            $this->assertArrayHasKey('id', $row);
+            $this->assertArrayHasKey('name', $row);
+            break; // Only test first row
+        }
     }
 
-    public function testPDOStatementMemoryEfficiency(): void
+    public function testIteratorMemoryEfficiency(): void
     {
         // Create test table with more data
         $connection = $this->queryBuilder->getConnection();
         $connection->execute('CREATE TABLE large_table (id INTEGER, data TEXT)');
-        
+
         // Insert multiple rows
         for ($i = 1; $i <= 100; $i++) {
             $connection->execute("INSERT INTO large_table VALUES ({$i}, 'data{$i}')");
         }
 
         $memoryBefore = memory_get_usage();
-        
-        $statement = $this->queryBuilder
+
+        $iterator = $this->queryBuilder
             ->select('*')
             ->from('large_table', 't')
             ->getArrayResult();
 
         $memoryAfter = memory_get_usage();
-        
+
         // Memory usage should be minimal since we're not loading all data into an array
         $memoryDiff = $memoryAfter - $memoryBefore;
-        
+
         // Should use much less memory than loading 100 rows into an array
-        $this->assertLessThan(50000, $memoryDiff, 'PDOStatement should use minimal memory');
+        $this->assertLessThan(50000, $memoryDiff, 'Iterator should use minimal memory');
         
         // Verify we can still iterate over all results
         $count = 0;
-        foreach ($statement as $row) {
+        foreach ($iterator as $row) {
             $count++;
         }
-        
+
         $this->assertEquals(100, $count);
     }
 
-    public function testPDOStatementErrorHandling(): void
+    public function testIteratorErrorHandling(): void
     {
         $this->expectException(\Fduarte42\Aurum\Exception\ORMException::class);
         $this->expectExceptionMessage('Query failed');
@@ -146,7 +139,7 @@ class QueryBuilderPDOStatementTest extends TestCase
             ->getArrayResult();
     }
 
-    public function testPDOStatementWithComplexQuery(): void
+    public function testIteratorWithComplexQuery(): void
     {
         // Create test tables with relationships
         $connection = $this->queryBuilder->getConnection();
@@ -159,7 +152,7 @@ class QueryBuilderPDOStatementTest extends TestCase
         $connection->execute('INSERT INTO posts VALUES (2, 1, "Post 2")');
         $connection->execute('INSERT INTO posts VALUES (3, 2, "Post 3")');
 
-        $statement = $this->queryBuilder
+        $iterator = $this->queryBuilder
             ->select('COUNT(*) as post_count')
             ->from('users', 'u')
             ->innerJoin('posts', 'p', 'u.id = p.user_id')
@@ -168,7 +161,7 @@ class QueryBuilderPDOStatementTest extends TestCase
             ->getArrayResult();
 
         $results = [];
-        foreach ($statement as $row) {
+        foreach ($iterator as $row) {
             $results[] = $row;
         }
 

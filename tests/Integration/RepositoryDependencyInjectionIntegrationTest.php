@@ -73,7 +73,8 @@ class RepositoryDependencyInjectionIntegrationTest extends TestCase
         $this->assertEquals(1, $count);
 
         // Test findAll
-        $allTodos = $todoRepository->findAll();
+        $allTodosIterator = $todoRepository->findAll();
+        $allTodos = iterator_to_array($allTodosIterator);
         $this->assertCount(1, $allTodos);
         $this->assertEquals('Test Todo with DI', $allTodos[0]->getTitle());
     }

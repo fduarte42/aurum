@@ -141,18 +141,21 @@ interface QueryBuilderInterface
     public function getParameters(): array;
 
     /**
-     * Execute the query and return results as a PDOStatement iterator
+     * Execute the query and return results as an Iterator over arrays
      *
-     * @return \PDOStatement
+     * @return \Iterator
      */
-    public function getArrayResult(): \PDOStatement;
+    public function getArrayResult(): \Iterator;
 
     /**
      * Execute the query and return hydrated entity objects (unmanaged/detached)
      *
-     * @return array<object>
+     * Returns a lazy iterator that yields entity objects one at a time for memory efficiency.
+     * Entities are hydrated on-demand as they are accessed.
+     *
+     * @return \Iterator<object>
      */
-    public function getResult(): array;
+    public function getResult(): \Iterator;
 
     /**
      * Execute the query and return one result

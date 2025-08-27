@@ -126,11 +126,13 @@ class TodoAppTest extends TestCase
         $todoRepo = $this->entityManager->getRepository(Todo::class);
 
         // Test findAll
-        $allTodos = $todoRepo->findAll();
+        $allTodosIterator = $todoRepo->findAll();
+        $allTodos = iterator_to_array($allTodosIterator);
         $this->assertCount(2, $allTodos);
 
         // Test findBy
-        $completedTodos = $todoRepo->findBy(['completed' => true]);
+        $completedTodosIterator = $todoRepo->findBy(['completed' => true]);
+        $completedTodos = iterator_to_array($completedTodosIterator);
         $this->assertCount(1, $completedTodos);
         $this->assertEquals('Todo 2', $completedTodos[0]->title);
 
@@ -266,7 +268,9 @@ class TodoAppTest extends TestCase
         
         $this->assertEquals(1, $userRepo->count());
         $this->assertEquals(1, $todoRepo->count());
-        $this->assertEquals('Will be saved', $todoRepo->findAll()[0]->title);
+
+        $allTodos = iterator_to_array($todoRepo->findAll());
+        $this->assertEquals('Will be saved', $allTodos[0]->title);
     }
 
     public function testDecimalPrecision(): void
