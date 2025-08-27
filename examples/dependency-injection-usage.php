@@ -26,23 +26,16 @@ class Product
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?UuidInterface $id = null;
+    public private(set) ?UuidInterface $id = null;
 
-    #[Column(type: 'string', length: 255)]
-    private string $name;
+    public function __construct(
+        #[Column(type: 'string', length: 255)]
+        public string $name,
 
-    #[Column(type: 'decimal', precision: 10, scale: 2)]
-    private string $price;
-
-    public function __construct(string $name, string $price)
-    {
-        $this->name = $name;
-        $this->price = $price;
+        #[Column(type: 'decimal', precision: 10, scale: 2)]
+        public string $price
+    ) {
     }
-
-    public function getId(): ?UuidInterface { return $this->id; }
-    public function getName(): string { return $this->name; }
-    public function getPrice(): string { return $this->price; }
 }
 
 // Custom service for dependency injection

@@ -48,26 +48,26 @@ class TodoAppTest extends TestCase
         $this->entityManager->flush();
         $this->entityManager->commit();
 
-        $this->assertNotNull($user->getId());
-        $this->assertEquals('john@example.com', $user->getEmail());
-        $this->assertEquals('John Doe', $user->getName());
+        $this->assertNotNull($user->id);
+        $this->assertEquals('john@example.com', $user->email);
+        $this->assertEquals('John Doe', $user->name);
     }
 
     public function testCreateTodo(): void
     {
         $todo = new Todo('Buy groceries', 'Milk, bread, eggs');
-        $todo->setPriority(BigDecimal::of('5.50'));
+        $todo->priority = BigDecimal::of('5.50');
 
         $this->entityManager->beginTransaction();
         $this->entityManager->persist($todo);
         $this->entityManager->flush();
         $this->entityManager->commit();
 
-        $this->assertNotNull($todo->getId());
-        $this->assertEquals('Buy groceries', $todo->getTitle());
-        $this->assertEquals('Milk, bread, eggs', $todo->getDescription());
-        $this->assertFalse($todo->isCompleted());
-        $this->assertEquals('5.50', (string) $todo->getPriority());
+        $this->assertNotNull($todo->id);
+        $this->assertEquals('Buy groceries', $todo->title);
+        $this->assertEquals('Milk, bread, eggs', $todo->description);
+        $this->assertFalse($todo->completed);
+        $this->assertEquals('5.50', (string) $todo->priority);
     }
 
     public function testUserTodoRelationship(): void
@@ -87,9 +87,9 @@ class TodoAppTest extends TestCase
         $this->entityManager->commit();
 
         // Verify relationships
-        $this->assertSame($user, $todo1->getUser());
-        $this->assertSame($user, $todo2->getUser());
-        $this->assertCount(2, $user->getTodos());
+        $this->assertSame($user, $todo1->user);
+        $this->assertSame($user, $todo2->user);
+        $this->assertCount(2, $user->todos);
     }
 
     public function testFindTodo(): void
@@ -101,14 +101,14 @@ class TodoAppTest extends TestCase
         $this->entityManager->flush();
         $this->entityManager->commit();
 
-        $id = $todo->getId();
+        $id = $todo->id;
         $this->entityManager->clear();
 
         $foundTodo = $this->entityManager->find(Todo::class, $id);
         
         $this->assertNotNull($foundTodo);
-        $this->assertEquals('Find me', $foundTodo->getTitle());
-        $this->assertEquals('Test description', $foundTodo->getDescription());
+        $this->assertEquals('Find me', $foundTodo->title);
+        $this->assertEquals('Test description', $foundTodo->description);
     }
 
     public function testTodoRepository(): void
@@ -132,12 +132,12 @@ class TodoAppTest extends TestCase
         // Test findBy
         $completedTodos = $todoRepo->findBy(['completed' => true]);
         $this->assertCount(1, $completedTodos);
-        $this->assertEquals('Todo 2', $completedTodos[0]->getTitle());
+        $this->assertEquals('Todo 2', $completedTodos[0]->title);
 
         // Test findOneBy
         $incompleteTodo = $todoRepo->findOneBy(['completed' => false]);
         $this->assertNotNull($incompleteTodo);
-        $this->assertEquals('Todo 1', $incompleteTodo->getTitle());
+        $this->assertEquals('Todo 1', $incompleteTodo->title);
 
         // Test count
         $totalCount = $todoRepo->count();
@@ -151,9 +151,9 @@ class TodoAppTest extends TestCase
     {
         $user = new User('test@example.com', 'Test User');
         $todo1 = new Todo('High Priority', 'Important task');
-        $todo1->setPriority(BigDecimal::of('10.00'));
+        $todo1->priority = BigDecimal::of('10.00');
         $todo2 = new Todo('Low Priority', 'Less important');
-        $todo2->setPriority(BigDecimal::of('1.00'));
+        $todo2->priority = BigDecimal::of('1.00');
 
         $this->entityManager->beginTransaction();
 
@@ -164,8 +164,8 @@ class TodoAppTest extends TestCase
         // Now set the user on todos and persist them
         $user->addTodo($todo1);
         $user->addTodo($todo2);
-        $todo1->setUser($user);
-        $todo2->setUser($user);
+        $todo1->user = $user;
+        $todo2->user = $user;
 
         $this->entityManager->persist($todo1);
         $this->entityManager->persist($todo2);
@@ -262,24 +262,24 @@ class TodoAppTest extends TestCase
         
         $this->assertEquals(1, $userRepo->count());
         $this->assertEquals(1, $todoRepo->count());
-        $this->assertEquals('Will be saved', $todoRepo->findAll()[0]->getTitle());
+        $this->assertEquals('Will be saved', $todoRepo->findAll()[0]->title);
     }
 
     public function testDecimalPrecision(): void
     {
         $todo = new Todo('Decimal test');
-        $todo->setPriority(BigDecimal::of('123.456789'));
+        $todo->priority = BigDecimal::of('123.456789');
 
         $this->entityManager->beginTransaction();
         $this->entityManager->persist($todo);
         $this->entityManager->flush();
         $this->entityManager->commit();
 
-        $id = $todo->getId();
+        $id = $todo->id;
         $this->entityManager->clear();
 
         $foundTodo = $this->entityManager->find(Todo::class, $id);
-        $this->assertEquals('123.456789', (string) $foundTodo->getPriority()); // Preserves full precision
+        $this->assertEquals('123.456789', (string) $foundTodo->priority); // Preserves full precision
     }
 
     private function createSchema(): void

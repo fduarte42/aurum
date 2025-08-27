@@ -18,22 +18,16 @@ class TestUser
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?UuidInterface $id = null;
-
-    #[Column(type: 'string')]
-    private string $name;
+    public private(set) ?UuidInterface $id = null;
 
     #[OneToMany(targetEntity: TestPost::class, mappedBy: 'user')]
-    private array $posts = [];
+    public array $posts = [];
 
-    public function __construct(string $name)
-    {
-        $this->name = $name;
+    public function __construct(
+        #[Column(type: 'string')]
+        public string $name
+    ) {
     }
-
-    public function getId(): ?UuidInterface { return $this->id; }
-    public function getName(): string { return $this->name; }
-    public function getPosts(): array { return $this->posts; }
 }
 
 #[Entity(table: 'posts')]
@@ -41,28 +35,19 @@ class TestPost
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?UuidInterface $id = null;
-
-    #[Column(type: 'string')]
-    private string $title;
+    public private(set) ?UuidInterface $id = null;
 
     #[ManyToOne(targetEntity: TestUser::class, inversedBy: 'posts')]
-    private ?TestUser $user = null;
+    public ?TestUser $user = null;
 
     #[ManyToOne(targetEntity: TestCategory::class)]
-    private ?TestCategory $category = null;
+    public ?TestCategory $category = null;
 
-    public function __construct(string $title)
-    {
-        $this->title = $title;
+    public function __construct(
+        #[Column(type: 'string')]
+        public string $title
+    ) {
     }
-
-    public function getId(): ?UuidInterface { return $this->id; }
-    public function getTitle(): string { return $this->title; }
-    public function getUser(): ?TestUser { return $this->user; }
-    public function getCategory(): ?TestCategory { return $this->category; }
-    public function setUser(?TestUser $user): void { $this->user = $user; }
-    public function setCategory(?TestCategory $category): void { $this->category = $category; }
 }
 
 #[Entity(table: 'categories')]
@@ -70,18 +55,13 @@ class TestCategory
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?UuidInterface $id = null;
+    public private(set) ?UuidInterface $id = null;
 
-    #[Column(type: 'string')]
-    private string $name;
-
-    public function __construct(string $name)
-    {
-        $this->name = $name;
+    public function __construct(
+        #[Column(type: 'string')]
+        public string $name
+    ) {
     }
-
-    public function getId(): ?UuidInterface { return $this->id; }
-    public function getName(): string { return $this->name; }
 }
 
 class QueryBuilderAutoJoinTest extends TestCase

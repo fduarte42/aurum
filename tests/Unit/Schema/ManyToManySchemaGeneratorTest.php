@@ -16,10 +16,7 @@ class SchemaUser
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?string $id = null;
-
-    #[Column(type: 'string', length: 255)]
-    private string $name;
+    public private(set) ?string $id = null;
 
     #[ManyToMany(targetEntity: SchemaRole::class)]
     #[JoinTable(
@@ -27,11 +24,12 @@ class SchemaUser
         joinColumns: [new JoinColumn(name: 'user_id', referencedColumnName: 'id')],
         inverseJoinColumns: [new JoinColumn(name: 'role_id', referencedColumnName: 'id')]
     )]
-    private array $roles = [];
+    public array $roles = [];
 
-    public function __construct(string $name)
-    {
-        $this->name = $name;
+    public function __construct(
+        #[Column(type: 'string', length: 255)]
+        public string $name
+    ) {
     }
 }
 
@@ -40,17 +38,15 @@ class SchemaRole
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?string $id = null;
-
-    #[Column(type: 'string', length: 100)]
-    private string $name;
+    public private(set) ?string $id = null;
 
     #[ManyToMany(targetEntity: SchemaUser::class, mappedBy: 'roles')]
-    private array $users = [];
+    public array $users = [];
 
-    public function __construct(string $name)
-    {
-        $this->name = $name;
+    public function __construct(
+        #[Column(type: 'string', length: 100)]
+        public string $name
+    ) {
     }
 }
 

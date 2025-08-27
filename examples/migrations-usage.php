@@ -15,33 +15,22 @@ class User
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?UuidInterface $id = null;
-
-    #[Column(type: 'string', length: 255, unique: true)]
-    private string $email;
-
-    #[Column(type: 'string', length: 255)]
-    private string $name;
-
-    #[Column(type: 'datetime')]
-    private \DateTimeImmutable $createdAt;
+    public private(set) ?UuidInterface $id = null;
 
     #[OneToMany(targetEntity: Post::class, mappedBy: 'author')]
-    private array $posts = [];
+    public array $posts = [];
 
-    public function __construct(string $email, string $name)
-    {
-        $this->email = $email;
-        $this->name = $name;
-        $this->createdAt = new \DateTimeImmutable();
+    public function __construct(
+        #[Column(type: 'string', length: 255, unique: true)]
+        public string $email,
+
+        #[Column(type: 'string', length: 255)]
+        public string $name,
+
+        #[Column(type: 'datetime')]
+        public \DateTimeImmutable $createdAt = new \DateTimeImmutable()
+    ) {
     }
-
-    // Getters and setters...
-    public function getId(): ?UuidInterface { return $this->id; }
-    public function getEmail(): string { return $this->email; }
-    public function getName(): string { return $this->name; }
-    public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
-    public function getPosts(): array { return $this->posts; }
 }
 
 #[Entity(table: 'posts')]
@@ -49,39 +38,25 @@ class Post
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?UuidInterface $id = null;
-
-    #[Column(type: 'string', length: 255)]
-    private string $title;
-
-    #[Column(type: 'text')]
-    private string $content;
-
-    #[Column(type: 'boolean')]
-    private bool $published = false;
-
-    #[Column(type: 'datetime')]
-    private \DateTimeImmutable $createdAt;
+    public private(set) ?UuidInterface $id = null;
 
     #[ManyToOne(targetEntity: User::class, inversedBy: 'posts')]
-    private ?User $author = null;
+    public ?User $author = null;
 
-    public function __construct(string $title, string $content)
-    {
-        $this->title = $title;
-        $this->content = $content;
-        $this->createdAt = new \DateTimeImmutable();
+    public function __construct(
+        #[Column(type: 'string', length: 255)]
+        public string $title,
+
+        #[Column(type: 'text')]
+        public string $content,
+
+        #[Column(type: 'boolean')]
+        public bool $published = false,
+
+        #[Column(type: 'datetime')]
+        public \DateTimeImmutable $createdAt = new \DateTimeImmutable()
+    ) {
     }
-
-    // Getters and setters...
-    public function getId(): ?UuidInterface { return $this->id; }
-    public function getTitle(): string { return $this->title; }
-    public function getContent(): string { return $this->content; }
-    public function isPublished(): bool { return $this->published; }
-    public function setPublished(bool $published): void { $this->published = $published; }
-    public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
-    public function getAuthor(): ?User { return $this->author; }
-    public function setAuthor(?User $author): void { $this->author = $author; }
 }
 
 echo "🚀 Aurum Migration System Demo\n";

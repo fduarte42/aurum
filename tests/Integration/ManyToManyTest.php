@@ -15,10 +15,7 @@ class TestUser
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?string $id = null;
-
-    #[Column(type: 'string', length: 255)]
-    private string $name;
+    public private(set) ?string $id = null;
 
     #[ManyToMany(targetEntity: TestRole::class)]
     #[JoinTable(
@@ -26,16 +23,13 @@ class TestUser
         joinColumns: [new JoinColumn(name: 'user_id', referencedColumnName: 'id')],
         inverseJoinColumns: [new JoinColumn(name: 'role_id', referencedColumnName: 'id')]
     )]
-    private array $roles = [];
+    public array $roles = [];
 
-    public function __construct(string $name)
-    {
-        $this->name = $name;
+    public function __construct(
+        #[Column(type: 'string', length: 255)]
+        public string $name = ''
+    ) {
     }
-
-    public function getId(): ?string { return $this->id; }
-    public function getName(): string { return $this->name; }
-    public function getRoles(): array { return $this->roles; }
     
     public function addRole(TestRole $role): void
     {
@@ -59,22 +53,16 @@ class TestRole
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?string $id = null;
-
-    #[Column(type: 'string', length: 100)]
-    private string $name;
+    public private(set) ?string $id = null;
 
     #[ManyToMany(targetEntity: TestUser::class, mappedBy: 'roles')]
-    private array $users = [];
+    public array $users = [];
 
-    public function __construct(string $name)
-    {
-        $this->name = $name;
+    public function __construct(
+        #[Column(type: 'string', length: 100)]
+        public string $name = ''
+    ) {
     }
-
-    public function getId(): ?string { return $this->id; }
-    public function getName(): string { return $this->name; }
-    public function getUsers(): array { return $this->users; }
 }
 
 class ManyToManyTest extends TestCase
@@ -149,19 +137,19 @@ class ManyToManyTest extends TestCase
         $this->entityManager->flush();
 
         // Verify entities were persisted
-        $this->assertNotNull($user->getId());
-        $this->assertNotNull($adminRole->getId());
-        $this->assertNotNull($userRole->getId());
+        $this->assertNotNull($user->id);
+        $this->assertNotNull($adminRole->id);
+        $this->assertNotNull($userRole->id);
 
         // Verify associations were created
         $connection = $this->entityManager->getConnection();
-        $associations = $connection->fetchAll('SELECT * FROM user_roles WHERE user_id = ?', [$user->getId()]);
-        
+        $associations = $connection->fetchAll('SELECT * FROM user_roles WHERE user_id = ?', [$user->id]);
+
         $this->assertCount(2, $associations);
-        
+
         $roleIds = array_column($associations, 'role_id');
-        $this->assertContains($adminRole->getId(), $roleIds);
-        $this->assertContains($userRole->getId(), $roleIds);
+        $this->assertContains($adminRole->id, $roleIds);
+        $this->assertContains($userRole->id, $roleIds);
     }
 
     public function testManyToManyLoading(): void
@@ -185,14 +173,14 @@ class ManyToManyTest extends TestCase
         $this->entityManager->clear();
 
         // Load user and verify roles
-        $foundUser = $this->entityManager->find(TestUser::class, $user->getId());
+        $foundUser = $this->entityManager->find(TestUser::class, $user->id);
         $this->assertNotNull($foundUser);
-        $this->assertEquals('Jane Smith', $foundUser->getName());
+        $this->assertEquals('Jane Smith', $foundUser->name);
 
-        $roles = $foundUser->getRoles();
+        $roles = $foundUser->roles;
         $this->assertCount(2, $roles);
 
-        $roleNames = array_map(fn($role) => $role->getName(), $roles);
+        $roleNames = array_map(fn($role) => $role->name, $roles);
         $this->assertContains('editor', $roleNames);
         $this->assertContains('reviewer', $roleNames);
     }
@@ -220,10 +208,10 @@ class ManyToManyTest extends TestCase
 
         // Verify association was removed
         $connection = $this->entityManager->getConnection();
-        $associations = $connection->fetchAll('SELECT * FROM user_roles WHERE user_id = ?', [$user->getId()]);
+        $associations = $connection->fetchAll('SELECT * FROM user_roles WHERE user_id = ?', [$user->id]);
 
         $this->assertCount(1, $associations);
-        $this->assertEquals($role2->getId(), $associations[0]['role_id']);
+        $this->assertEquals($role2->id, $associations[0]['role_id']);
     }
 
     public function testBidirectionalManyToMany(): void
@@ -248,14 +236,14 @@ class ManyToManyTest extends TestCase
         // Clear and reload
         $this->entityManager->clear();
 
-        $foundRole = $this->entityManager->find(TestRole::class, $adminRole->getId());
+        $foundRole = $this->entityManager->find(TestRole::class, $adminRole->id);
         $this->assertNotNull($foundRole);
 
         // Verify inverse side (role -> users)
-        $users = $foundRole->getUsers();
+        $users = $foundRole->users;
         $this->assertCount(2, $users);
 
-        $userNames = array_map(fn($user) => $user->getName(), $users);
+        $userNames = array_map(fn($user) => $user->name, $users);
         $this->assertContains('Alice', $userNames);
         $this->assertContains('Bob', $userNames);
     }

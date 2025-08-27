@@ -16,123 +16,63 @@ class Todo
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?UuidInterface $id = null;
+    public private(set) ?UuidInterface $id = null;
 
     #[Column(type: 'string', length: 255)]
-    private string $title;
+    public string $title = '';
 
     #[Column(type: 'string', nullable: true)]
-    private ?string $description = null;
+    public ?string $description = null;
 
     #[Column(type: 'boolean')]
-    private bool $completed = false;
+    public bool $completed = false {
+        set {
+            $this->completed = $value;
+            $this->completedAt = $value ? new \DateTimeImmutable() : null;
+        }
+    }
 
     #[Column(type: 'decimal', precision: 10, scale: 2, nullable: true)]
-    private ?BigDecimal $priority = null;
+    public ?BigDecimal $priority = null;
 
     #[Column(type: 'datetime')]
-    private \DateTimeImmutable $createdAt;
+    public \DateTimeImmutable $createdAt;
 
     #[Column(type: 'datetime', nullable: true)]
-    private ?\DateTimeImmutable $completedAt = null;
+    public private(set) ?\DateTimeImmutable $completedAt = null;
 
     #[Column(type: 'uuid', nullable: true)]
-    private ?UuidInterface $userId = null;
+    public private(set) ?UuidInterface $userId = null;
 
     #[ManyToOne(targetEntity: User::class, inversedBy: 'todos')]
-    private ?User $user = null;
+    public ?User $user = null {
+        set {
+            $this->user = $value;
+            $this->userId = $value?->id;
+        }
+    }
 
-    public function __construct(string $title, ?string $description = null)
+    public function __construct(string $title = '', ?string $description = null, ?BigDecimal $priority = null, ?\DateTimeImmutable $createdAt = null)
     {
         $this->title = $title;
         $this->description = $description;
-        $this->createdAt = new \DateTimeImmutable();
-    }
-
-    public function getId(): ?UuidInterface
-    {
-        return $this->id;
-    }
-
-    public function getTitle(): string
-    {
-        return $this->title;
-    }
-
-    public function setTitle(string $title): void
-    {
-        $this->title = $title;
-    }
-
-    public function getDescription(): ?string
-    {
-        return $this->description;
-    }
-
-    public function setDescription(?string $description): void
-    {
-        $this->description = $description;
-    }
-
-    public function isCompleted(): bool
-    {
-        return $this->completed;
-    }
-
-    public function setCompleted(bool $completed): void
-    {
-        $this->completed = $completed;
-        $this->completedAt = $completed ? new \DateTimeImmutable() : null;
-    }
-
-    public function getPriority(): ?BigDecimal
-    {
-        return $this->priority;
-    }
-
-    public function setPriority(?BigDecimal $priority): void
-    {
         $this->priority = $priority;
-    }
-
-    public function getCreatedAt(): \DateTimeImmutable
-    {
-        return $this->createdAt;
-    }
-
-    public function getCompletedAt(): ?\DateTimeImmutable
-    {
-        return $this->completedAt;
-    }
-
-    public function getUser(): ?User
-    {
-        return $this->user;
-    }
-
-    public function setUser(?User $user): void
-    {
-        $this->user = $user;
-        $this->userId = $user?->getId();
-    }
-
-    public function getUserId(): ?UuidInterface
-    {
-        return $this->userId;
-    }
-
-    public function setUserId(?UuidInterface $userId): void
-    {
-        $this->userId = $userId;
+        $this->createdAt = $createdAt ?? new \DateTimeImmutable();
     }
 
     public function complete(): void
     {
-        $this->setCompleted(true);
+        $this->completed = true;
     }
 
     public function reopen(): void
     {
-        $this->setCompleted(false);
+        $this->completed = false;
     }
+
+    // Temporary backward compatibility methods for tests
+    public function getId(): ?UuidInterface { return $this->id; }
+    public function getTitle(): string { return $this->title; }
+    public function setCompleted(bool $completed): void { $this->completed = $completed; }
+    public function setPriority(?BigDecimal $priority): void { $this->priority = $priority; }
 }

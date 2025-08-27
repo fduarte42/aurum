@@ -37,14 +37,12 @@ class User
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?string $id = null;
+    public private(set) ?string $id = null;
 
-    #[Column(type: 'string', length: 255, unique: true)]
-    private string $email;
-
-    public function __construct(string $email)
-    {
-        $this->email = $email;
+    public function __construct(
+        #[Column(type: 'string', length: 255, unique: true)]
+        public string $email
+    ) {
     }
 }
 

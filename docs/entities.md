@@ -18,25 +18,19 @@ class User
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?string $id = null;
+    public private(set) ?string $id = null;
 
-    #[Column(type: 'string', length: 255, unique: true)]
-    private string $email;
+    public function __construct(
+        #[Column(type: 'string', length: 255, unique: true)]
+        public string $email,
 
-    #[Column(type: 'string', length: 255)]
-    private string $name;
+        #[Column(type: 'string', length: 255)]
+        public string $name,
 
-    #[Column(type: 'datetime')]
-    private \DateTime $createdAt;
-
-    public function __construct(string $email, string $name)
-    {
-        $this->email = $email;
-        $this->name = $name;
-        $this->createdAt = new \DateTime();
+        #[Column(type: 'datetime')]
+        public \DateTime $createdAt = new \DateTime()
+    ) {
     }
-
-    // Getters and setters...
 }
 ```
 
@@ -163,24 +157,19 @@ class Post
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?string $id = null;
-
-    #[Column(type: 'string', length: 255)]
-    private string $title;
+    public private(set) ?string $id = null;
 
     #[ManyToOne(targetEntity: User::class)]
     #[JoinColumn(name: 'author_id', referencedColumnName: 'id')]
-    private User $author;
+    public User $author;
 
-    public function __construct(string $title, User $author)
-    {
-        $this->title = $title;
+    public function __construct(
+        #[Column(type: 'string', length: 255)]
+        public string $title,
+
+        User $author
+    ) {
         $this->author = $author;
-    }
-
-    public function getAuthor(): User
-    {
-        return $this->author;
     }
 }
 ```

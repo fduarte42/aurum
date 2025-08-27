@@ -34,28 +34,22 @@ class Category
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?UuidInterface $id = null;
-
-    #[Column(type: 'string', length: 100)]
-    private string $name;
+    public private(set) ?UuidInterface $id = null;
 
     // ✅ OneToMany relationship - ORM handles the inverse foreign keys automatically!
     #[OneToMany(targetEntity: Task::class, mappedBy: 'category')]
-    private array $tasks = [];
+    public array $tasks = [];
 
-    public function __construct(string $name)
-    {
-        $this->name = $name;
+    public function __construct(
+        #[Column(type: 'string', length: 100)]
+        public string $name
+    ) {
     }
-
-    public function getId(): ?UuidInterface { return $this->id; }
-    public function getName(): string { return $this->name; }
-    public function getTasks(): array { return $this->tasks; }
 
     public function addTask(Task $task): void
     {
         $this->tasks[] = $task;
-        $task->setCategory($this); // ✅ ORM will auto-persist and set foreign keys!
+        $task->category = $this; // ✅ ORM will auto-persist and set foreign keys!
     }
 }
 
@@ -64,48 +58,30 @@ class Task
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?UuidInterface $id = null;
-
-    #[Column(type: 'string', length: 255)]
-    private string $title;
-
-    #[Column(type: 'string', nullable: true)]
-    private ?string $description = null;
-
-    #[Column(type: 'decimal', precision: 5, scale: 2)]
-    private BigDecimal $estimatedHours;
-
-    #[Column(type: 'boolean')]
-    private bool $completed = false;
-
-    #[Column(type: 'datetime')]
-    private \DateTimeImmutable $createdAt;
+    public private(set) ?UuidInterface $id = null;
 
     // ✅ ManyToOne relationship - NO manual foreign key field needed!
     // ✅ ORM automatically creates and manages the 'category_id' column!
     #[ManyToOne(targetEntity: Category::class, inversedBy: 'tasks')]
-    private ?Category $category = null;
+    public ?Category $category = null;
 
-    public function __construct(string $title, BigDecimal $estimatedHours)
-    {
-        $this->title = $title;
-        $this->estimatedHours = $estimatedHours;
-        $this->createdAt = new \DateTimeImmutable();
+    public function __construct(
+        #[Column(type: 'string', length: 255)]
+        public string $title,
+
+        #[Column(type: 'decimal', precision: 5, scale: 2)]
+        public BigDecimal $estimatedHours,
+
+        #[Column(type: 'string', nullable: true)]
+        public ?string $description = null,
+
+        #[Column(type: 'boolean')]
+        public bool $completed = false,
+
+        #[Column(type: 'datetime')]
+        public \DateTimeImmutable $createdAt = new \DateTimeImmutable()
+    ) {
     }
-
-    // Getters and setters
-    public function getId(): ?UuidInterface { return $this->id; }
-    public function getTitle(): string { return $this->title; }
-    public function setTitle(string $title): void { $this->title = $title; }
-    public function getDescription(): ?string { return $this->description; }
-    public function setDescription(?string $description): void { $this->description = $description; }
-    public function getEstimatedHours(): BigDecimal { return $this->estimatedHours; }
-    public function setEstimatedHours(BigDecimal $estimatedHours): void { $this->estimatedHours = $estimatedHours; }
-    public function isCompleted(): bool { return $this->completed; }
-    public function setCompleted(bool $completed): void { $this->completed = $completed; }
-    public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
-    public function getCategory(): ?Category { return $this->category; }
-    public function setCategory(?Category $category): void { $this->category = $category; }
 }
 
 // Setup

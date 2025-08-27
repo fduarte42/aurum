@@ -15,66 +15,31 @@ class User
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?UuidInterface $id = null;
+    public private(set) ?UuidInterface $id = null;
 
     #[Column(type: 'string', length: 255, unique: true)]
-    private string $email;
+    public string $email = '';
 
     #[Column(type: 'string', length: 255)]
-    private string $name;
+    public string $name = '';
 
     #[Column(type: 'datetime')]
-    private \DateTimeImmutable $createdAt;
+    public \DateTimeImmutable $createdAt;
 
     #[OneToMany(targetEntity: Todo::class, mappedBy: 'user')]
-    private array $todos = [];
+    public array $todos = [];
 
-    public function __construct(string $email, string $name)
+    public function __construct(string $email = '', string $name = '', ?\DateTimeImmutable $createdAt = null)
     {
         $this->email = $email;
         $this->name = $name;
-        $this->createdAt = new \DateTimeImmutable();
-    }
-
-    public function getId(): ?UuidInterface
-    {
-        return $this->id;
-    }
-
-    public function getEmail(): string
-    {
-        return $this->email;
-    }
-
-    public function setEmail(string $email): void
-    {
-        $this->email = $email;
-    }
-
-    public function getName(): string
-    {
-        return $this->name;
-    }
-
-    public function setName(string $name): void
-    {
-        $this->name = $name;
-    }
-
-    public function getCreatedAt(): \DateTimeImmutable
-    {
-        return $this->createdAt;
-    }
-
-    public function getTodos(): array
-    {
-        return $this->todos;
+        $this->createdAt = $createdAt ?? new \DateTimeImmutable();
     }
 
     public function addTodo(Todo $todo): void
     {
         $this->todos[] = $todo;
-        $todo->setUser($this);
+        $todo->user = $this;
     }
 
     public function removeTodo(Todo $todo): void
@@ -82,7 +47,13 @@ class User
         $key = array_search($todo, $this->todos, true);
         if ($key !== false) {
             unset($this->todos[$key]);
-            $todo->setUser(null);
+            $todo->user = null;
         }
     }
+
+    // Temporary backward compatibility methods for tests
+    public function getId(): ?UuidInterface { return $this->id; }
+    public function getEmail(): string { return $this->email; }
+    public function getName(): string { return $this->name; }
+    public function setName(string $name): void { $this->name = $name; }
 }

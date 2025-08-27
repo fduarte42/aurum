@@ -76,24 +76,19 @@ class User
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?UuidInterface $id = null;
-
-    #[Column(type: 'string', length: 255, unique: true)]
-    private string $email;
-
-    #[Column(type: 'string', length: 255)]
-    private string $name;
+    public private(set) ?UuidInterface $id = null;
 
     #[OneToMany(targetEntity: Todo::class, mappedBy: 'user')]
-    private array $todos = [];
+    public array $todos = [];
 
-    public function __construct(string $email, string $name)
-    {
-        $this->email = $email;
-        $this->name = $name;
+    public function __construct(
+        #[Column(type: 'string', length: 255, unique: true)]
+        public string $email,
+
+        #[Column(type: 'string', length: 255)]
+        public string $name
+    ) {
     }
-
-    // Getters and setters...
 }
 
 #[Entity(table: 'todos')]
@@ -101,26 +96,22 @@ class Todo
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?UuidInterface $id = null;
-
-    #[Column(type: 'string', length: 255)]
-    private string $title;
-
-    #[Column(type: 'decimal', precision: 10, scale: 2, nullable: true)]
-    private ?Decimal $priority = null;
-
-    #[Column(type: 'boolean')]
-    private bool $completed = false;
+    public private(set) ?UuidInterface $id = null;
 
     #[ManyToOne(targetEntity: User::class, inversedBy: 'todos')]
-    private ?User $user = null;
+    public ?User $user = null;
 
-    public function __construct(string $title)
-    {
-        $this->title = $title;
+    public function __construct(
+        #[Column(type: 'string', length: 255)]
+        public string $title,
+
+        #[Column(type: 'decimal', precision: 10, scale: 2, nullable: true)]
+        public ?Decimal $priority = null,
+
+        #[Column(type: 'boolean')]
+        public bool $completed = false
+    ) {
     }
-
-    // Getters and setters...
 }
 
 #[Entity(table: 'roles')]
@@ -128,20 +119,16 @@ class Role
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?UuidInterface $id = null;
-
-    #[Column(type: 'string', length: 100)]
-    private string $name;
+    public private(set) ?UuidInterface $id = null;
 
     #[ManyToMany(targetEntity: User::class, mappedBy: 'roles')]
-    private array $users = [];
+    public array $users = [];
 
-    public function __construct(string $name)
-    {
-        $this->name = $name;
+    public function __construct(
+        #[Column(type: 'string', length: 100)]
+        public string $name
+    ) {
     }
-
-    // Getters and setters...
 }
 ```
 
@@ -164,7 +151,7 @@ class User
         joinColumns: [new JoinColumn(name: 'user_id', referencedColumnName: 'id')],
         inverseJoinColumns: [new JoinColumn(name: 'role_id', referencedColumnName: 'id')]
     )]
-    private array $roles = [];
+    public array $roles = [];
 
     public function addRole(Role $role): void
     {
@@ -179,11 +166,6 @@ class User
         if ($key !== false) {
             unset($this->roles[$key]);
         }
-    }
-
-    public function getRoles(): array
-    {
-        return $this->roles;
     }
 }
 ```
@@ -320,22 +302,25 @@ class Product
 {
     #[Id]
     #[Column] // Type inferred as 'uuid' from UuidInterface
-    private ?UuidInterface $id = null;
+    public private(set) ?UuidInterface $id = null;
 
-    #[Column] // Type inferred as 'string' with length 255
-    private string $name;
+    public function __construct(
+        #[Column] // Type inferred as 'string' with length 255
+        public string $name,
 
-    #[Column] // Type inferred as 'decimal' from BigDecimal
-    private BigDecimal $price;
+        #[Column] // Type inferred as 'decimal' from BigDecimal
+        public BigDecimal $price,
 
-    #[Column] // Type inferred as 'integer'
-    private int $stock;
+        #[Column] // Type inferred as 'integer'
+        public int $stock,
 
-    #[Column] // Type inferred as 'boolean'
-    private bool $active = true;
+        #[Column] // Type inferred as 'boolean'
+        public bool $active = true,
 
-    #[Column] // Type inferred as 'datetime'
-    private \DateTimeImmutable $createdAt;
+        #[Column] // Type inferred as 'datetime'
+        public \DateTimeImmutable $createdAt = new \DateTimeImmutable()
+    ) {
+    }
 }
 ```
 
@@ -349,14 +334,17 @@ Choose the decimal implementation that best fits your needs:
 #[Entity(table: 'financial_data')]
 class FinancialData
 {
-    #[Column(type: 'decimal', precision: 15, scale: 4)]
-    private BigDecimal $amount; // Using brick/math
+    public function __construct(
+        #[Column(type: 'decimal', precision: 15, scale: 4)]
+        public BigDecimal $amount, // Using brick/math
 
-    #[Column(type: 'decimal_ext', precision: 10, scale: 2)]
-    private Decimal $tax; // Using ext-decimal
+        #[Column(type: 'decimal_ext', precision: 10, scale: 2)]
+        public Decimal $tax, // Using ext-decimal
 
-    #[Column(type: 'decimal_string', precision: 8, scale: 3)]
-    private string $commission; // String-based for maximum precision
+        #[Column(type: 'decimal_string', precision: 8, scale: 3)]
+        public string $commission // String-based for maximum precision
+    ) {
+    }
 }
 ```
 
@@ -370,17 +358,20 @@ Different date/time types for different use cases:
 #[Entity(table: 'events')]
 class Event
 {
-    #[Column(type: 'date')] // Date only (Y-m-d)
-    private \DateTimeImmutable $eventDate;
+    public function __construct(
+        #[Column(type: 'date')] // Date only (Y-m-d)
+        public \DateTimeImmutable $eventDate,
 
-    #[Column(type: 'time')] // Time only (H:i:s)
-    private \DateTimeImmutable $startTime;
+        #[Column(type: 'time')] // Time only (H:i:s)
+        public \DateTimeImmutable $startTime,
 
-    #[Column(type: 'datetime')] // Standard datetime
-    private \DateTimeImmutable $createdAt;
+        #[Column(type: 'datetime')] // Standard datetime
+        public \DateTimeImmutable $createdAt,
 
-    #[Column(type: 'datetime_tz')] // Timezone-aware (stored as JSON)
-    private \DateTimeImmutable $scheduledAt;
+        #[Column(type: 'datetime_tz')] // Timezone-aware (stored as JSON)
+        public \DateTimeImmutable $scheduledAt
+    ) {
+    }
 }
 ```
 
