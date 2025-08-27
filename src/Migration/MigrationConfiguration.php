@@ -149,7 +149,7 @@ class MigrationConfiguration
     {
         if (!is_dir($this->migrationsDirectory)) {
             // Try to create the directory
-            if (!mkdir($this->migrationsDirectory, 0755, true)) {
+            if (!@mkdir($this->migrationsDirectory, 0755, true)) {
                 throw MigrationException::migrationDirectoryNotFound($this->migrationsDirectory);
             }
         }
