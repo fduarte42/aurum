@@ -584,7 +584,7 @@ class QueryBuilder implements QueryBuilderInterface
     /**
      * Add inheritance-aware WHERE condition for a specific entity class
      */
-    public function whereEntityClass(string $entityClass, string $alias = null): self
+    public function whereEntityClass(string $entityClass, ?string $alias = null): self
     {
         if ($this->metadataFactory === null) {
             throw new \RuntimeException('MetadataFactory is required for inheritance-aware queries');
@@ -609,7 +609,7 @@ class QueryBuilder implements QueryBuilderInterface
     /**
      * Add inheritance-aware WHERE condition to exclude specific entity classes
      */
-    public function whereNotEntityClass(array $entityClasses, string $alias = null): self
+    public function whereNotEntityClass(array $entityClasses, ?string $alias = null): self
     {
         if ($this->metadataFactory === null || empty($entityClasses)) {
             return $this;

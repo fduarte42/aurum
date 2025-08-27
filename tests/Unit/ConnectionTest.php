@@ -505,8 +505,10 @@ class ConnectionTest extends TestCase
 
     public function testQuoteWithArrayValue(): void
     {
-        // Test quote method with array (should be converted to string)
+        // Test quote method with array (should be converted to JSON string)
         $quoted = $this->connection->quote(['test', 'array']);
         $this->assertIsString($quoted);
+        // Verify it contains the JSON representation
+        $this->assertStringContainsString('["test","array"]', $quoted);
     }
 }

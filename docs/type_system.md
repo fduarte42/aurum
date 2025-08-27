@@ -179,14 +179,22 @@ private \DateTimeImmutable $createdAt;
 
 ### Timezone-Aware DateTime
 
-Stores both datetime and timezone information as JSON:
+Stores datetime and timezone information across three separate columns:
 
 ```php
 #[Column(type: 'datetime_tz')]
 private \DateTimeImmutable $scheduledAt;
 
-// Database storage: {"datetime": "2023-12-01 09:30:00", "timezone": "America/New_York"}
+// Database storage across 3 columns:
+// scheduled_at_utc: '2023-12-01 14:30:00' (UTC time)
+// scheduled_at_local: '2023-12-01 09:30:00' (local time)
+// scheduled_at_timezone: 'America/New_York' (timezone name)
 ```
+
+This multi-column approach provides:
+- **Better Performance**: No JSON parsing required
+- **Query Flexibility**: Can query by UTC time, local time, or timezone separately
+- **Database Compatibility**: Works with all database systems without JSON support
 
 ## Custom Types
 

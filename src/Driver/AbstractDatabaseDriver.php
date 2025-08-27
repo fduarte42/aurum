@@ -62,7 +62,12 @@ abstract class AbstractDatabaseDriver implements DatabaseDriverInterface
         if ($value === null) {
             return 'NULL';
         }
-        
+
+        // Handle arrays by converting to JSON string representation
+        if (is_array($value)) {
+            $value = json_encode($value);
+        }
+
         return $this->pdo->quote((string) $value);
     }
 

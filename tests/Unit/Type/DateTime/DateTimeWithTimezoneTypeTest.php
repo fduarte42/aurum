@@ -27,66 +27,39 @@ class DateTimeWithTimezoneTypeTest extends TestCase
     {
         $this->assertNull($this->type->convertToPHPValue(null));
 
-        // Test JSON string conversion
-        $jsonData = json_encode([
-            'datetime' => '2023-12-01 15:30:45',
-            'timezone' => 'America/New_York'
-        ]);
-        $result = $this->type->convertToPHPValue($jsonData);
-        $this->assertInstanceOf(DateTimeImmutable::class, $result);
-        $this->assertEquals('2023-12-01 15:30:45', $result->format('Y-m-d H:i:s'));
-        $this->assertEquals('America/New_York', $result->getTimezone()->getName());
-
-        // Test array conversion
-        $arrayData = [
-            'datetime' => '2023-12-01 15:30:45',
-            'timezone' => 'Europe/London'
-        ];
-        $result = $this->type->convertToPHPValue($arrayData);
-        $this->assertInstanceOf(DateTimeImmutable::class, $result);
-        $this->assertEquals('Europe/London', $result->getTimezone()->getName());
-
         // Test DateTimeImmutable passthrough
         $dateTime = new DateTimeImmutable('2023-12-01 15:30:45', new DateTimeZone('UTC'));
         $result = $this->type->convertToPHPValue($dateTime);
         $this->assertSame($dateTime, $result);
 
-        // Test fallback string parsing
+        // Test DateTime conversion to DateTimeImmutable
+        $dateTime = new \DateTime('2023-12-01 15:30:45', new DateTimeZone('America/New_York'));
+        $result = $this->type->convertToPHPValue($dateTime);
+        $this->assertInstanceOf(DateTimeImmutable::class, $result);
+        $this->assertEquals('2023-12-01 15:30:45', $result->format('Y-m-d H:i:s'));
+        $this->assertEquals('America/New_York', $result->getTimezone()->getName());
+
+        // Test string parsing
         $result = $this->type->convertToPHPValue('2023-12-01 15:30:45');
         $this->assertInstanceOf(DateTimeImmutable::class, $result);
+        $this->assertEquals('2023-12-01 15:30:45', $result->format('Y-m-d H:i:s'));
     }
 
     public function testConvertToDatabaseValue(): void
     {
-        $this->assertNull($this->type->convertToDatabaseValue(null));
+        $this->expectException(\BadMethodCallException::class);
+        $this->expectExceptionMessage('convertToDatabaseValue() is not supported for multi-column types. Use convertToMultipleDatabaseValues() instead.');
 
-        // Test DateTimeImmutable conversion
         $dateTime = new DateTimeImmutable('2023-12-01 15:30:45', new DateTimeZone('America/New_York'));
-        $result = $this->type->convertToDatabaseValue($dateTime);
-        $decoded = json_decode($result, true);
-        
-        $this->assertIsArray($decoded);
-        $this->assertEquals('2023-12-01 15:30:45', $decoded['datetime']);
-        $this->assertEquals('America/New_York', $decoded['timezone']);
-
-        // Test string conversion
-        $result = $this->type->convertToDatabaseValue('2023-12-01 15:30:45');
-        $decoded = json_decode($result, true);
-        $this->assertIsArray($decoded);
-        $this->assertEquals('2023-12-01 15:30:45', $decoded['datetime']);
-
-        // Test array conversion
-        $arrayData = [
-            'datetime' => '2023-12-01 15:30:45',
-            'timezone' => 'Europe/London'
-        ];
-        $result = $this->type->convertToDatabaseValue($arrayData);
-        $this->assertEquals(json_encode($arrayData), $result);
+        $this->type->convertToDatabaseValue($dateTime);
     }
 
     public function testGetSQLDeclaration(): void
     {
-        $this->assertEquals('JSON', $this->type->getSQLDeclaration());
+        $this->expectException(\BadMethodCallException::class);
+        $this->expectExceptionMessage('getSQLDeclaration() is not supported for multi-column types. Use getMultiColumnSQLDeclarations() instead.');
+
+        $this->type->getSQLDeclaration();
     }
 
     public function testGetRequiredColumnPostfixes(): void
@@ -129,14 +102,10 @@ class DateTimeWithTimezoneTypeTest extends TestCase
         $this->assertArrayHasKey('_local', $result);
         $this->assertArrayHasKey('_timezone', $result);
 
-        // Test array conversion
-        $arrayData = [
-            'datetime' => '2023-12-01 15:30:45',
-            'timezone' => 'Europe/London'
-        ];
-        $result = $this->type->convertToMultipleDatabaseValues($arrayData);
-        $this->assertIsArray($result);
-        $this->assertEquals('Europe/London', $result['_timezone']);
+        // Test unsupported type
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Cannot convert value to multiple database values: unsupported type');
+        $this->type->convertToMultipleDatabaseValues(['invalid' => 'data']);
     }
 
     public function testConvertFromMultipleDatabaseValues(): void

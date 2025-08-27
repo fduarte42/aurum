@@ -42,20 +42,7 @@ class DateTimeWithTimezoneType extends AbstractType implements MultiColumnTypeIn
         }
 
         if (is_string($value)) {
-            // Try to parse as JSON first (backward compatibility with old storage format)
-            $decoded = json_decode($value, true);
-            if (json_last_error() === JSON_ERROR_NONE && isset($decoded['datetime'], $decoded['timezone'])) {
-                $timezone = new DateTimeZone($decoded['timezone']);
-                return new DateTimeImmutable($decoded['datetime'], $timezone);
-            }
-
-            // Fallback to direct datetime parsing
             return new DateTimeImmutable($value);
-        }
-
-        if (is_array($value) && isset($value['datetime'], $value['timezone'])) {
-            $timezone = new DateTimeZone($value['timezone']);
-            return new DateTimeImmutable($value['datetime'], $timezone);
         }
 
         return $value;
@@ -83,30 +70,16 @@ class DateTimeWithTimezoneType extends AbstractType implements MultiColumnTypeIn
         }
 
         if (is_string($value)) {
-            // Parse the datetime and extract timezone info
             $datetime = new DateTimeImmutable($value);
             return $this->convertToMultipleDatabaseValues($datetime);
         }
 
-        if (is_array($value) && isset($value['datetime'], $value['timezone'])) {
-            $timezone = new DateTimeZone($value['timezone']);
-            $datetime = new DateTimeImmutable($value['datetime'], $timezone);
-            return $this->convertToMultipleDatabaseValues($datetime);
-        }
-
-        // Fallback: store as-is in all columns
-        return [
-            '_utc' => $value,
-            '_local' => $value,
-            '_timezone' => null,
-        ];
+        throw new \InvalidArgumentException('Cannot convert value to multiple database values: unsupported type');
     }
 
     public function convertFromMultipleDatabaseValues(array $values): mixed
     {
-        // Check if we have all required values
         if (!isset($values['_local']) || !isset($values['_timezone'])) {
-            // Try to use UTC if available
             if (isset($values['_utc'])) {
                 return new DateTimeImmutable($values['_utc'], new DateTimeZone('UTC'));
             }
@@ -121,7 +94,6 @@ class DateTimeWithTimezoneType extends AbstractType implements MultiColumnTypeIn
             $timezone = new DateTimeZone($values['_timezone']);
             return new DateTimeImmutable($values['_local'], $timezone);
         } catch (\Exception $e) {
-            // Fallback to UTC if timezone is invalid
             if (isset($values['_utc'])) {
                 return new DateTimeImmutable($values['_utc'], new DateTimeZone('UTC'));
             }
@@ -131,33 +103,9 @@ class DateTimeWithTimezoneType extends AbstractType implements MultiColumnTypeIn
 
     public function convertToDatabaseValue(mixed $value): mixed
     {
-        if ($value === null) {
-            return null;
-        }
-
-        if ($value instanceof DateTimeInterface) {
-            $data = [
-                'datetime' => $value->format('Y-m-d H:i:s'),
-                'timezone' => $value->getTimezone()->getName(),
-            ];
-            return json_encode($data, JSON_THROW_ON_ERROR);
-        }
-
-        if (is_string($value)) {
-            // Parse the datetime and extract timezone info
-            $datetime = new DateTimeImmutable($value);
-            $data = [
-                'datetime' => $datetime->format('Y-m-d H:i:s'),
-                'timezone' => $datetime->getTimezone()->getName(),
-            ];
-            return json_encode($data, JSON_THROW_ON_ERROR);
-        }
-
-        if (is_array($value) && isset($value['datetime'], $value['timezone'])) {
-            return json_encode($value, JSON_THROW_ON_ERROR);
-        }
-
-        return $value;
+        throw new \BadMethodCallException(
+            'convertToDatabaseValue() is not supported for multi-column types. Use convertToMultipleDatabaseValues() instead.'
+        );
     }
 
     public function getMultiColumnSQLDeclarations(array $postfixes): array
@@ -184,8 +132,9 @@ class DateTimeWithTimezoneType extends AbstractType implements MultiColumnTypeIn
 
     public function getSQLDeclaration(array $options = []): string
     {
-        // For backward compatibility, return JSON when used as single column
-        return 'JSON';
+        throw new \BadMethodCallException(
+            'getSQLDeclaration() is not supported for multi-column types. Use getMultiColumnSQLDeclarations() instead.'
+        );
     }
 
     public function isCompatibleWithPHPType(string $phpType): bool
@@ -199,17 +148,9 @@ class DateTimeWithTimezoneType extends AbstractType implements MultiColumnTypeIn
 
     protected function getGenericSQLType(array $options = []): string
     {
-        return 'TEXT';
-    }
-
-    protected function getSQLiteType(array $options = []): string
-    {
-        return 'TEXT';
-    }
-
-    protected function getMySQLType(array $options = []): string
-    {
-        return 'JSON';
+        throw new \BadMethodCallException(
+            'getGenericSQLType() is not supported for multi-column types. Use getMultiColumnSQLDeclarations() instead.'
+        );
     }
 
     /**

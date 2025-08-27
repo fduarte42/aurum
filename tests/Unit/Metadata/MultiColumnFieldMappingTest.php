@@ -159,8 +159,10 @@ class MultiColumnFieldMappingTest extends TestCase
 
     public function testGetSQLDeclaration(): void
     {
-        // Should return JSON for backward compatibility
-        $this->assertEquals('JSON', $this->mapping->getSQLDeclaration());
+        $this->expectException(\BadMethodCallException::class);
+        $this->expectExceptionMessage('getSQLDeclaration() is not supported for multi-column types. Use getMultiColumnSQLDeclarations() instead.');
+
+        $this->mapping->getSQLDeclaration();
     }
 
     public function testWithNullableMapping(): void

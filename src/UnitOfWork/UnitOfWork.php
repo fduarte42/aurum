@@ -806,10 +806,10 @@ class UnitOfWork implements UnitOfWorkInterface
         $targetColumn = $this->getJunctionColumnName($joinTable, 'inverse', 'related_id');
 
         // Check if association already exists
-        $existsQuery = "SELECT COUNT(*) FROM {$tableName} WHERE {$sourceColumn} = ? AND {$targetColumn} = ?";
+        $existsQuery = "SELECT COUNT(*) as count FROM {$tableName} WHERE {$sourceColumn} = ? AND {$targetColumn} = ?";
         $exists = $this->connection->fetchOne($existsQuery, [$entityId, $relatedId]);
 
-        if (!$exists || $exists[0] == 0) {
+        if (!$exists || $exists['count'] == 0) {
             // Insert the association
             $insertQuery = "INSERT INTO {$tableName} ({$sourceColumn}, {$targetColumn}) VALUES (?, ?)";
             $this->connection->execute($insertQuery, [$entityId, $relatedId]);

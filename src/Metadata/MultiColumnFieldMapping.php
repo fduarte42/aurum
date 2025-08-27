@@ -47,7 +47,7 @@ class MultiColumnFieldMapping implements MultiColumnFieldMappingInterface
 
     public function getColumnName(): string
     {
-        // Return the first column name for backward compatibility
+        // Return the first column name (required by FieldMappingInterface)
         return reset($this->columnNamesWithPostfixes) ?: $this->baseColumnName;
     }
 
