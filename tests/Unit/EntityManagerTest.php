@@ -331,16 +331,16 @@ class EntityManagerTest extends TestCase
     {
         $nonexistentId = 'nonexistent-id';
 
-        // Skip test if LazyGhost is not available
-        if (!class_exists('\LazyGhost')) {
+        // Skip test if lazy ghost functionality is not available
+        if (!$this->isLazyGhostSupported()) {
             $this->expectException(\RuntimeException::class);
-            $this->expectExceptionMessage('LazyGhost is not available. PHP 8.4+ is required for optimized proxy support.');
+            $this->expectExceptionMessage('Lazy ghost functionality is not available. PHP 8.4+ is required for optimized proxy support.');
         }
 
         $userRef = $this->entityManager->getReference(User::class, $nonexistentId);
 
-        // Only run assertions if LazyGhost is available
-        if (class_exists('\LazyGhost')) {
+        // Only run assertions if lazy ghost functionality is available
+        if ($this->isLazyGhostSupported()) {
             $this->assertInstanceOf(User::class, $userRef);
 
             // The proxy should be created successfully, but accessing properties should fail
@@ -404,5 +404,19 @@ class EntityManagerTest extends TestCase
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
         ');
+    }
+
+    /**
+     * Check if lazy ghost functionality is supported
+     */
+    private function isLazyGhostSupported(): bool
+    {
+        // Check if PHP version supports lazy ghost (8.4+)
+        if (!version_compare(PHP_VERSION, '8.4.0', '>=')) {
+            return false;
+        }
+
+        // Check if the newLazyGhost method exists on ReflectionClass
+        return method_exists(\ReflectionClass::class, 'newLazyGhost');
     }
 }

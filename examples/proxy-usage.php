@@ -112,8 +112,8 @@ try {
     echo "   - Email: {$authorRef->email}\n";
 
 } catch (\RuntimeException $e) {
-    if (str_contains($e->getMessage(), 'LazyGhost is not available')) {
-        echo "⚠️  LazyGhost not available in this PHP version\n";
+    if (str_contains($e->getMessage(), 'Lazy ghost functionality is not available')) {
+        echo "⚠️  Lazy ghost functionality not available in this PHP version\n";
         echo "   Error: {$e->getMessage()}\n";
         echo "   This is expected in PHP < 8.4\n";
     } else {
@@ -140,9 +140,9 @@ try {
     echo "   - Author: {$book->author->name}\n";
     
 } catch (\RuntimeException $e) {
-    if (str_contains($e->getMessage(), 'LazyGhost is not available')) {
-        echo "⚠️  Skipping relationship test - LazyGhost not available\n";
-        
+    if (str_contains($e->getMessage(), 'Lazy ghost functionality is not available')) {
+        echo "⚠️  Skipping relationship test - Lazy ghost functionality not available\n";
+
         // Fallback: create book with regular author entity
         $entityManager->beginTransaction();
         $regularAuthor = $entityManager->find(Author::class, $author->id);
@@ -150,7 +150,7 @@ try {
         $entityManager->persist($book);
         $entityManager->flush();
         $entityManager->commit();
-        
+
         echo "✅ Created book with regular author entity (fallback)\n";
         echo "   - Book: {$book->title}\n";
         echo "   - Author: {$book->author->name}\n";
@@ -174,8 +174,8 @@ try {
     echo "   - Both have same name: " . ($authorRef1->name === $authorRef2->name ? 'Yes' : 'No') . "\n";
 
 } catch (\RuntimeException $e) {
-    if (str_contains($e->getMessage(), 'LazyGhost is not available')) {
-        echo "⚠️  Multiple references test skipped - LazyGhost not available\n";
+    if (str_contains($e->getMessage(), 'Lazy ghost functionality is not available')) {
+        echo "⚠️  Multiple references test skipped - Lazy ghost functionality not available\n";
         echo "   This is expected in PHP < 8.4\n";
     } else {
         throw $e;
@@ -185,8 +185,30 @@ try {
 echo "\n5. Summary\n";
 echo "=========\n";
 
-echo "✅ Optimized proxy implementation active\n";
-echo "✅ Direct database loading enabled\n";
-echo "✅ All proxy features working correctly\n";
+if (isLazyGhostSupported()) {
+    echo "✅ PHP 8.4+ lazy ghost support detected\n";
+    echo "✅ Optimized proxy implementation active\n";
+    echo "✅ Direct database loading enabled\n";
+    echo "✅ All proxy features working correctly\n";
+} else {
+    echo "⚠️  PHP < 8.4 detected - Lazy ghost functionality not available\n";
+    echo "ℹ️  Proxy functionality requires PHP 8.4+\n";
+    echo "ℹ️  Regular entity loading works normally\n";
+    echo "ℹ️  Upgrade to PHP 8.4+ for optimized proxy support\n";
+}
 
 echo "\n🎉 Proxy usage example completed!\n";
+
+/**
+ * Check if lazy ghost functionality is supported
+ */
+function isLazyGhostSupported(): bool
+{
+    // Check if PHP version supports lazy ghost (8.4+)
+    if (!version_compare(PHP_VERSION, '8.4.0', '>=')) {
+        return false;
+    }
+
+    // Check if the newLazyGhost method exists on ReflectionClass
+    return method_exists(\ReflectionClass::class, 'newLazyGhost');
+}

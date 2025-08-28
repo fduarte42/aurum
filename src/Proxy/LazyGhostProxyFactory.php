@@ -35,8 +35,8 @@ class LazyGhostProxyFactory implements ProxyFactoryInterface
 
         $reflectionClass = new ReflectionClass($className);
 
-        // Always use LazyGhost if available (PHP 8.4+), otherwise throw exception
-        if (class_exists('\LazyGhost') && method_exists($reflectionClass, 'newLazyGhost')) {
+        // Check if lazy ghost functionality is available (PHP 8.4+)
+        if ($this->isLazyGhostSupported($reflectionClass)) {
             // Create a lazy ghost proxy with direct database loading
             $proxy = $reflectionClass->newLazyGhost(function (object $proxy) use ($className, $identifier) {
                 $this->initializeProxyDirectly($proxy, $className, $identifier);
@@ -50,14 +50,14 @@ class LazyGhostProxyFactory implements ProxyFactoryInterface
 
             return $proxy;
         } else {
-            throw new \RuntimeException('LazyGhost is not available. PHP 8.4+ is required for optimized proxy support.');
+            throw new \RuntimeException('Lazy ghost functionality is not available. PHP 8.4+ is required for optimized proxy support.');
         }
     }
 
     public function isProxy(object $object): bool
     {
-        // Only LazyGhost objects are considered proxies
-        return class_exists('\LazyGhost') && $object instanceof \LazyGhost;
+        // Check if object is a lazy ghost proxy
+        return $this->isLazyGhostObject($object);
     }
 
     public function initializeProxy(object $proxy): void
@@ -80,8 +80,31 @@ class LazyGhostProxyFactory implements ProxyFactoryInterface
             return true;
         }
 
-        // For LazyGhost proxies, use the built-in lazy state check
-        return !$proxy->isLazy();
+        // For lazy ghost proxies, we need to check if the proxy has been initialized
+        // Since we can't rely on isLazy method, we'll use reflection to check if properties are set
+        try {
+            $reflection = new ReflectionClass($proxy);
+            $properties = $reflection->getProperties();
+
+            // If any property has a non-default value, consider it initialized
+            foreach ($properties as $property) {
+                $property->setAccessible(true);
+
+                // Skip uninitialized typed properties to avoid errors
+                if (!$property->isInitialized($proxy)) {
+                    continue;
+                }
+
+                $value = $property->getValue($proxy);
+                if ($value !== null && $value !== '' && $value !== [] && $value !== false) {
+                    return true;
+                }
+            }
+
+            return false;
+        } catch (\ReflectionException | \Error) {
+            return false; // Assume not initialized if we can't check
+        }
     }
 
     public function getRealClass(object|string $objectOrClass): string
@@ -109,7 +132,7 @@ class LazyGhostProxyFactory implements ProxyFactoryInterface
     /**
      * Initialize proxy directly by loading from database
      */
-    private function initializeProxyDirectly(object $proxy, string $className, mixed $identifier): void
+    protected function initializeProxyDirectly(object $proxy, string $className, mixed $identifier): void
     {
         if ($this->connection === null || $this->metadataFactory === null) {
             throw new \RuntimeException('Connection and MetadataFactory are required for direct proxy initialization');
@@ -137,7 +160,7 @@ class LazyGhostProxyFactory implements ProxyFactoryInterface
     /**
      * Set identifier on proxy immediately without triggering lazy loading
      */
-    private function setIdentifierOnProxy(object $proxy, string $className, mixed $identifier): void
+    protected function setIdentifierOnProxy(object $proxy, string $className, mixed $identifier): void
     {
         if ($this->metadataFactory === null) {
             return; // Skip if metadata factory not available
@@ -274,5 +297,28 @@ class LazyGhostProxyFactory implements ProxyFactoryInterface
                 return parent::getArrayCopy();
             }
         };
+    }
+
+    /**
+     * Check if lazy ghost functionality is supported
+     */
+    private function isLazyGhostSupported(ReflectionClass $reflectionClass): bool
+    {
+        // Check if PHP version supports lazy ghost (8.4+)
+        if (!version_compare(PHP_VERSION, '8.4.0', '>=')) {
+            return false;
+        }
+
+        // Check if the newLazyGhost method exists on ReflectionClass
+        return method_exists($reflectionClass, 'newLazyGhost');
+    }
+
+    /**
+     * Check if an object is a lazy ghost object
+     */
+    private function isLazyGhostObject(object $object): bool
+    {
+        // Check if the object is tracked in our proxy identifiers map
+        return isset($this->proxyIdentifiers[$object]);
     }
 }
