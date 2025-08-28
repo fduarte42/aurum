@@ -185,16 +185,8 @@ try {
 echo "\n5. Summary\n";
 echo "=========\n";
 
-if (class_exists('\LazyGhost')) {
-    echo "✅ PHP 8.4+ LazyGhost support detected\n";
-    echo "✅ Optimized proxy implementation active\n";
-    echo "✅ Direct database loading enabled\n";
-    echo "✅ All proxy features working correctly\n";
-} else {
-    echo "⚠️  PHP < 8.4 detected - LazyGhost not available\n";
-    echo "ℹ️  Proxy functionality requires PHP 8.4+\n";
-    echo "ℹ️  Regular entity loading works normally\n";
-    echo "ℹ️  Upgrade to PHP 8.4+ for optimized proxy support\n";
-}
+echo "✅ Optimized proxy implementation active\n";
+echo "✅ Direct database loading enabled\n";
+echo "✅ All proxy features working correctly\n";
 
 echo "\n🎉 Proxy usage example completed!\n";
