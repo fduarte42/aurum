@@ -68,10 +68,10 @@ class ProductRepositoryWithDI extends Repository
 
     public function findExpensiveProducts(string $minPrice): array
     {
-        return $this->findBySql(
+        return iterator_to_array($this->findBySql(
             'SELECT * FROM products WHERE CAST(price AS REAL) > CAST(? AS REAL) ORDER BY price DESC',
             [$minPrice]
-        );
+        ));
     }
 
     public function calculateDiscountedPrice(Product $product, float $discountPercent): string
@@ -120,10 +120,10 @@ class TraditionalProductRepository extends Repository
     
     public function findByPriceRange(string $minPrice, string $maxPrice): array
     {
-        return $this->findBySql(
+        return iterator_to_array($this->findBySql(
             'SELECT * FROM products WHERE CAST(price AS REAL) BETWEEN CAST(? AS REAL) AND CAST(? AS REAL)',
             [$minPrice, $maxPrice]
-        );
+        ));
     }
 }
 

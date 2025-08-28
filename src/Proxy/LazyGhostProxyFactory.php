@@ -5,28 +5,26 @@ declare(strict_types=1);
 namespace Fduarte42\Aurum\Proxy;
 
 use Fduarte42\Aurum\Exception\ORMException;
+use Fduarte42\Aurum\Metadata\EntityMetadataInterface;
+use Fduarte42\Aurum\Connection\ConnectionInterface;
+use Fduarte42\Aurum\Metadata\MetadataFactory;
 use ReflectionClass;
 use WeakMap;
 
 /**
  * Proxy factory implementation using PHP 8.4 LazyGhost objects
+ * Fully optimized for lazy-ghost pattern with direct database loading
  */
 class LazyGhostProxyFactory implements ProxyFactoryInterface
 {
     /** @var WeakMap<object, mixed> */
     private WeakMap $proxyIdentifiers;
 
-    /** @var WeakMap<object, bool> */
-    private WeakMap $proxyInitialized;
-
-    /** @var WeakMap<object, callable> */
-    private WeakMap $proxyInitializers;
-
-    public function __construct()
-    {
+    public function __construct(
+        private readonly ?ConnectionInterface $connection = null,
+        private readonly ?MetadataFactory $metadataFactory = null
+    ) {
         $this->proxyIdentifiers = new WeakMap();
-        $this->proxyInitialized = new WeakMap();
-        $this->proxyInitializers = new WeakMap();
     }
 
     public function createProxy(string $className, mixed $identifier, callable $initializer): object
@@ -37,53 +35,29 @@ class LazyGhostProxyFactory implements ProxyFactoryInterface
 
         $reflectionClass = new ReflectionClass($className);
 
-        // Check if LazyGhost is available (PHP 8.4+)
+        // Always use LazyGhost if available (PHP 8.4+), otherwise throw exception
         if (class_exists('\LazyGhost') && method_exists($reflectionClass, 'newLazyGhost')) {
-            // Create a lazy ghost proxy
-            $proxy = $reflectionClass->newLazyGhost(function (object $proxy) use ($initializer, $identifier) {
-                // Mark as initialized
-                $this->proxyInitialized[$proxy] = true;
-
-                // Call the initializer to load the actual entity data
-                $entity = $initializer();
-
-                if ($entity === null) {
-                    throw ORMException::entityNotFound(get_class($proxy), $identifier);
-                }
-
-                // Copy properties from the loaded entity to the proxy
-                $this->copyEntityToProxy($entity, $proxy);
+            // Create a lazy ghost proxy with direct database loading
+            $proxy = $reflectionClass->newLazyGhost(function (object $proxy) use ($className, $identifier) {
+                $this->initializeProxyDirectly($proxy, $className, $identifier);
             });
 
-            // Store the identifier and initialization state
+            // Store the identifier
             $this->proxyIdentifiers[$proxy] = $identifier;
-            $this->proxyInitialized[$proxy] = false;
+
+            // Set the ID property immediately without triggering lazy loading
+            $this->setIdentifierOnProxy($proxy, $className, $identifier);
 
             return $proxy;
         } else {
-            // Fallback: create a simple proxy using newInstanceWithoutConstructor
-            $proxy = $reflectionClass->newInstanceWithoutConstructor();
-
-            // Store the identifier and initialization state
-            $this->proxyIdentifiers[$proxy] = $identifier;
-            $this->proxyInitialized[$proxy] = false;
-
-            // Store the initializer for later use
-            $this->proxyInitializers[$proxy] = $initializer;
-
-            return $proxy;
+            throw new \RuntimeException('LazyGhost is not available. PHP 8.4+ is required for optimized proxy support.');
         }
     }
 
     public function isProxy(object $object): bool
     {
-        // Check if it's a LazyGhost (if available)
-        if (class_exists('\LazyGhost') && $object instanceof \LazyGhost) {
-            return true;
-        }
-
-        // Check if it's in our proxy tracking
-        return isset($this->proxyIdentifiers[$object]);
+        // Only LazyGhost objects are considered proxies
+        return class_exists('\LazyGhost') && $object instanceof \LazyGhost;
     }
 
     public function initializeProxy(object $proxy): void
@@ -96,37 +70,8 @@ class LazyGhostProxyFactory implements ProxyFactoryInterface
             return;
         }
 
-        // Check if it's a LazyGhost
-        if (class_exists('\LazyGhost') && $proxy instanceof \LazyGhost) {
-            // Force initialization by accessing a property
-            $reflectionClass = new ReflectionClass($proxy);
-            $properties = $reflectionClass->getProperties();
-
-            if (!empty($properties)) {
-                $property = $properties[0];
-                $property->setAccessible(true);
-                $property->getValue($proxy); // This triggers the lazy initialization
-            }
-        } else {
-            // Fallback proxy initialization
-            if (isset($this->proxyInitializers[$proxy])) {
-                $initializer = $this->proxyInitializers[$proxy];
-                $identifier = $this->proxyIdentifiers[$proxy];
-
-                $entity = $initializer();
-
-                if ($entity === null) {
-                    throw ORMException::entityNotFound(get_class($proxy), $identifier);
-                }
-
-                // Copy properties from the loaded entity to the proxy
-                $this->copyEntityToProxy($entity, $proxy);
-                $this->proxyInitialized[$proxy] = true;
-            } else {
-                // If no initializer is found, mark as initialized anyway
-                $this->proxyInitialized[$proxy] = true;
-            }
-        }
+        // Force initialization by accessing a non-identifier property
+        $this->triggerLazyInitialization($proxy);
     }
 
     public function isProxyInitialized(object $proxy): bool
@@ -135,13 +80,8 @@ class LazyGhostProxyFactory implements ProxyFactoryInterface
             return true;
         }
 
-        // Check if it's a LazyGhost
-        if (class_exists('\LazyGhost') && $proxy instanceof \LazyGhost) {
-            return !$proxy->isLazy();
-        }
-
-        // For fallback proxies, check our tracking
-        return isset($this->proxyInitialized[$proxy]) && $this->proxyInitialized[$proxy];
+        // For LazyGhost proxies, use the built-in lazy state check
+        return !$proxy->isLazy();
     }
 
     public function getRealClass(object|string $objectOrClass): string
@@ -167,24 +107,99 @@ class LazyGhostProxyFactory implements ProxyFactoryInterface
     }
 
     /**
-     * Copy properties from source entity to target proxy
+     * Initialize proxy directly by loading from database
      */
-    private function copyEntityToProxy(object $source, object $target): void
+    private function initializeProxyDirectly(object $proxy, string $className, mixed $identifier): void
     {
-        $sourceReflection = new ReflectionClass($source);
-        $targetReflection = new ReflectionClass($target);
+        if ($this->connection === null || $this->metadataFactory === null) {
+            throw new \RuntimeException('Connection and MetadataFactory are required for direct proxy initialization');
+        }
 
-        foreach ($sourceReflection->getProperties() as $property) {
+        $metadata = $this->metadataFactory->getMetadataFor($className);
+
+        // Load from database
+        $sql = sprintf(
+            'SELECT * FROM %s WHERE %s = :id',
+            $this->connection->quoteIdentifier($metadata->getTableName()),
+            $this->connection->quoteIdentifier($metadata->getIdentifierColumnName())
+        );
+
+        $data = $this->connection->fetchOne($sql, ['id' => $identifier]);
+
+        if ($data === null) {
+            throw ORMException::entityNotFound($className, $identifier);
+        }
+
+        // Populate proxy directly without going through UnitOfWork
+        $this->populateProxyFromData($proxy, $metadata, $data);
+    }
+
+    /**
+     * Set identifier on proxy immediately without triggering lazy loading
+     */
+    private function setIdentifierOnProxy(object $proxy, string $className, mixed $identifier): void
+    {
+        if ($this->metadataFactory === null) {
+            return; // Skip if metadata factory not available
+        }
+
+        try {
+            $metadata = $this->metadataFactory->getMetadataFor($className);
+            $identifierField = $metadata->getIdentifierFieldName();
+
+            $reflectionClass = new ReflectionClass($proxy);
+            $property = $reflectionClass->getProperty($identifierField);
             $property->setAccessible(true);
-            $value = $property->getValue($source);
 
-            try {
-                $targetProperty = $targetReflection->getProperty($property->getName());
-                $targetProperty->setAccessible(true);
-                $targetProperty->setValue($target, $value);
-            } catch (\ReflectionException) {
-                // Property doesn't exist in target, skip
+            // Set the identifier directly - this should not trigger lazy loading for ID properties
+            $property->setValue($proxy, $identifier);
+        } catch (\ReflectionException) {
+            // Property doesn't exist or can't be set, skip
+        }
+    }
+
+    /**
+     * Populate proxy from database data
+     */
+    private function populateProxyFromData(object $proxy, EntityMetadataInterface $metadata, array $data): void
+    {
+        foreach ($metadata->getFieldMappings() as $fieldMapping) {
+            $columnName = $fieldMapping->getColumnName();
+            if (isset($data[$columnName])) {
+                $metadata->setFieldValue($proxy, $fieldMapping->getFieldName(), $data[$columnName]);
             }
+        }
+    }
+
+    /**
+     * Trigger lazy initialization by accessing a non-identifier property
+     */
+    private function triggerLazyInitialization(object $proxy): void
+    {
+        $reflectionClass = new ReflectionClass($proxy);
+        $properties = $reflectionClass->getProperties();
+
+        // Find a non-identifier property to trigger initialization
+        foreach ($properties as $property) {
+            if ($this->metadataFactory !== null) {
+                try {
+                    $metadata = $this->metadataFactory->getMetadataFor($reflectionClass->getName());
+                    if (!$metadata->isIdentifier($property->getName())) {
+                        $property->setAccessible(true);
+                        $property->getValue($proxy); // This triggers the lazy initialization
+                        return;
+                    }
+                } catch (\Exception) {
+                    // Continue to next property
+                }
+            }
+        }
+
+        // Fallback: access first property if no metadata available
+        if (!empty($properties)) {
+            $property = $properties[0];
+            $property->setAccessible(true);
+            $property->getValue($proxy);
         }
     }
 
