@@ -181,7 +181,6 @@ class RepositoryFactory
             $value = null;
 
             // Check if property is already set (to avoid overriding constructor-injected values)
-            $property->setAccessible(true);
             if ($property->isInitialized($instance) && $property->getValue($instance) !== null) {
                 continue;
             }
@@ -228,6 +227,7 @@ class RepositoryFactory
             'setEntityManager' => $this->entityManager,
             'setMetadata' => $metadata,
             'setContainer' => $this->container,
+            'setEntityHydrator' => $this->container?->get(\Fduarte42\Aurum\Hydration\EntityHydratorInterface::class),
         ];
 
         foreach ($setters as $methodName => $value) {

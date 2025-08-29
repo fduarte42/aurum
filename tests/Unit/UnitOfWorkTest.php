@@ -6,6 +6,7 @@ namespace Fduarte42\Aurum\Tests\Unit;
 
 use Fduarte42\Aurum\Connection\ConnectionFactory;
 use Fduarte42\Aurum\Exception\ORMException;
+use Fduarte42\Aurum\Hydration\EntityHydrator;
 use Fduarte42\Aurum\Metadata\MetadataFactory;
 use Fduarte42\Aurum\Proxy\LazyGhostProxyFactory;
 use Fduarte42\Aurum\Tests\Fixtures\Todo;
@@ -32,11 +33,13 @@ class UnitOfWorkTest extends TestCase
         $this->metadataFactory = new MetadataFactory($typeRegistry, $typeInference);
 
         $proxyFactory = new LazyGhostProxyFactory();
-        
+        $entityHydrator = new EntityHydrator($this->metadataFactory);
+
         $this->unitOfWork = new UnitOfWork(
             $this->connection,
             $this->metadataFactory,
             $proxyFactory,
+            $entityHydrator,
             'test_uow'
         );
         
@@ -122,7 +125,6 @@ class UnitOfWorkTest extends TestCase
         // Clear the ID to simulate entity without ID
         $reflection = new \ReflectionClass($user);
         $idProperty = $reflection->getProperty('id');
-        $idProperty->setAccessible(true);
         $idProperty->setValue($user, null);
         
         $this->expectException(ORMException::class);
@@ -151,9 +153,15 @@ class UnitOfWorkTest extends TestCase
         $user = new User('test@example.com', 'Test User');
         $this->unitOfWork->persist($user);
         
-        $this->expectException(ORMException::class);
-        $this->expectExceptionMessage('No active transaction found');
+        // Should NOT throw exception anymore as it automatically manages transactions
         $this->unitOfWork->flush();
+        
+        // Verify user was inserted
+        $result = $this->connection->fetchOne(
+            'SELECT * FROM users WHERE id = ?',
+            [$user->getId()->toString()]
+        );
+        $this->assertNotNull($result);
     }
 
     public function testFlushWithInsertions(): void
@@ -403,7 +411,6 @@ class UnitOfWorkTest extends TestCase
         // Use reflection to test private extractEntityData method
         $reflection = new \ReflectionClass($this->unitOfWork);
         $method = $reflection->getMethod('extractEntityData');
-        $method->setAccessible(true);
 
         $data = $method->invoke($this->unitOfWork, $user);
         $this->assertArrayHasKey('email', $data);
@@ -490,7 +497,6 @@ class UnitOfWorkTest extends TestCase
         // Use reflection to test private computeChangeSets method
         $reflection = new \ReflectionClass($this->unitOfWork);
         $method = $reflection->getMethod('computeChangeSets');
-        $method->setAccessible(true);
         $method->invoke($this->unitOfWork);
 
         // Should have scheduled update
@@ -513,7 +519,6 @@ class UnitOfWorkTest extends TestCase
         // Use reflection to test private populateEntity method
         $reflection = new \ReflectionClass($this->unitOfWork);
         $method = $reflection->getMethod('populateEntity');
-        $method->setAccessible(true);
         $method->invoke($this->unitOfWork, $user, $data);
 
         // Verify entity was populated

@@ -14,7 +14,7 @@ use Ramsey\Uuid\UuidInterface;
 #[Entity(table: 'todos')]
 class Todo
 {
-    #[Id]
+    #[Id(strategy: 'UUID_TIME_BASED')]
     #[Column(type: 'uuid')]
     public private(set) ?UuidInterface $id = null;
 

@@ -13,7 +13,7 @@ use Ramsey\Uuid\UuidInterface;
 #[Entity(table: 'users')]
 class User
 {
-    #[Id]
+    #[Id(strategy: 'UUID_TIME_BASED')]
     #[Column(type: 'uuid')]
     public private(set) ?UuidInterface $id = null;
 

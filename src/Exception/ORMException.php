@@ -29,6 +29,11 @@ class ORMException extends \Exception
         return new self(sprintf('Metadata for class "%s" not found.', $className));
     }
 
+    public static function noIdentifierFound(string $className): self
+    {
+        return new self(sprintf('No identifier fields found for "%s".', $className));
+    }
+
     public static function transactionNotActive(): self
     {
         return new self('No active transaction found.');

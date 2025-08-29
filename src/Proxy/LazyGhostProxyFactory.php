@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Fduarte42\Aurum\Proxy;
 
 use Fduarte42\Aurum\Exception\ORMException;
+use Fduarte42\Aurum\Hydration\EntityHydratorInterface;
 use Fduarte42\Aurum\Metadata\EntityMetadataInterface;
 use Fduarte42\Aurum\Connection\ConnectionInterface;
 use Fduarte42\Aurum\Metadata\MetadataFactory;
@@ -45,8 +46,8 @@ class LazyGhostProxyFactory implements ProxyFactoryInterface
             // Store the identifier
             $this->proxyIdentifiers[$proxy] = $identifier;
 
-            // Set the ID property immediately without triggering lazy loading
-            $this->setIdentifierOnProxy($proxy, $className, $identifier);
+            // Note: We don't set the ID property immediately to avoid triggering lazy loading
+            // The ID will be available through getProxyIdentifier() method
 
             return $proxy;
         } else {
@@ -80,30 +81,11 @@ class LazyGhostProxyFactory implements ProxyFactoryInterface
             return true;
         }
 
-        // For lazy ghost proxies, we need to check if the proxy has been initialized
-        // Since we can't rely on isLazy method, we'll use reflection to check if properties are set
         try {
             $reflection = new ReflectionClass($proxy);
-            $properties = $reflection->getProperties();
-
-            // If any property has a non-default value, consider it initialized
-            foreach ($properties as $property) {
-                $property->setAccessible(true);
-
-                // Skip uninitialized typed properties to avoid errors
-                if (!$property->isInitialized($proxy)) {
-                    continue;
-                }
-
-                $value = $property->getValue($proxy);
-                if ($value !== null && $value !== '' && $value !== [] && $value !== false) {
-                    return true;
-                }
-            }
-
-            return false;
+            return !$reflection->isUninitializedLazyObject($proxy);
         } catch (\ReflectionException | \Error) {
-            return false; // Assume not initialized if we can't check
+            return false;
         }
     }
 
@@ -141,16 +123,32 @@ class LazyGhostProxyFactory implements ProxyFactoryInterface
         $metadata = $this->metadataFactory->getMetadataFor($className);
 
         // Load from database
+        $where = [];
+        $criteria = [];
+        $identifierFieldNames = $metadata->getIdentifierFieldNames();
+        
+        if (is_array($identifier)) {
+            foreach ($identifierFieldNames as $fieldName) {
+                $columnName = $metadata->getFieldMapping($fieldName)->getColumnName();
+                $where[] = $this->connection->quoteIdentifier($columnName) . ' = :' . $columnName;
+                $criteria[$columnName] = $identifier[$fieldName] ?? $identifier[$columnName] ?? null;
+            }
+        } else {
+            $columnName = $metadata->getIdentifierColumnName();
+            $where[] = $this->connection->quoteIdentifier($columnName) . ' = :id';
+            $criteria['id'] = $identifier;
+        }
+
         $sql = sprintf(
-            'SELECT * FROM %s WHERE %s = :id',
+            'SELECT * FROM %s WHERE %s',
             $this->connection->quoteIdentifier($metadata->getTableName()),
-            $this->connection->quoteIdentifier($metadata->getIdentifierColumnName())
+            implode(' AND ', $where)
         );
 
-        $data = $this->connection->fetchOne($sql, ['id' => $identifier]);
+        $data = $this->connection->fetchOne($sql, $criteria);
 
         if ($data === null) {
-            throw ORMException::entityNotFound($className, $identifier);
+            throw ORMException::entityNotFound($className, is_array($identifier) ? json_encode($identifier) : (string)$identifier);
         }
 
         // Populate proxy directly without going through UnitOfWork
@@ -168,14 +166,25 @@ class LazyGhostProxyFactory implements ProxyFactoryInterface
 
         try {
             $metadata = $this->metadataFactory->getMetadataFor($className);
-            $identifierField = $metadata->getIdentifierFieldName();
+            $identifierFields = $metadata->getIdentifierFieldNames();
 
             $reflectionClass = new ReflectionClass($proxy);
-            $property = $reflectionClass->getProperty($identifierField);
-            $property->setAccessible(true);
+            
+            if (is_array($identifier)) {
+                foreach ($identifierFields as $fieldName) {
+                    $value = $identifier[$fieldName] ?? null;
+                    if ($value !== null) {
+                        $property = $reflectionClass->getProperty($fieldName);
+                        $property->setValue($proxy, $value);
+                    }
+                }
+            } else {
+                $identifierField = $identifierFields[0];
+                $property = $reflectionClass->getProperty($identifierField);
 
-            // Set the identifier directly - this should not trigger lazy loading for ID properties
-            $property->setValue($proxy, $identifier);
+                // Set the identifier directly - this should not trigger lazy loading for ID properties
+                $property->setValue($proxy, $identifier);
+            }
         } catch (\ReflectionException) {
             // Property doesn't exist or can't be set, skip
         }
@@ -208,7 +217,6 @@ class LazyGhostProxyFactory implements ProxyFactoryInterface
                 try {
                     $metadata = $this->metadataFactory->getMetadataFor($reflectionClass->getName());
                     if (!$metadata->isIdentifier($property->getName())) {
-                        $property->setAccessible(true);
                         $property->getValue($proxy); // This triggers the lazy initialization
                         return;
                     }
@@ -221,7 +229,6 @@ class LazyGhostProxyFactory implements ProxyFactoryInterface
         // Fallback: access first property if no metadata available
         if (!empty($properties)) {
             $property = $properties[0];
-            $property->setAccessible(true);
             $property->getValue($proxy);
         }
     }

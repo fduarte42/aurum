@@ -133,7 +133,6 @@ class ConnectionTest extends TestCase
         $driver = $this->connection->getDriver();
         $reflection = new \ReflectionClass($driver);
         $method = $reflection->getMethod('getSavepointSQL');
-        $method->setAccessible(true);
         $method->invoke($driver, 'INVALID', 'test');
     }
 
@@ -380,14 +379,12 @@ class ConnectionTest extends TestCase
         // Test SQLite driver
         $reflection = new \ReflectionClass($sqliteDriver);
         $method = $reflection->getMethod('getSavepointSQL');
-        $method->setAccessible(true);
         $sql = $method->invoke($sqliteDriver, 'RELEASE', 'test');
         $this->assertEquals('RELEASE SAVEPOINT "test"', $sql);
 
         // Test MariaDB driver
         $reflection = new \ReflectionClass($mariaDbDriver);
         $method = $reflection->getMethod('getSavepointSQL');
-        $method->setAccessible(true);
         $sql = $method->invoke($mariaDbDriver, 'RELEASE', 'test');
         $this->assertEquals('RELEASE SAVEPOINT `test`', $sql);
     }

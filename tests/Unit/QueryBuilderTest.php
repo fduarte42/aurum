@@ -305,7 +305,7 @@ class QueryBuilderTest extends TestCase
         $connection->execute('INSERT INTO test_table VALUES (1, "test1")');
 
         $this->expectException(\Fduarte42\Aurum\Exception\ORMException::class);
-        $this->expectExceptionMessage('Cannot hydrate entities: root entity class and metadata factory must be set');
+        $this->expectExceptionMessage('Cannot hydrate entities: root entity class, metadata factory, and entity hydrator must be set');
 
         $this->queryBuilder
             ->select('*')
@@ -426,7 +426,6 @@ class QueryBuilderTest extends TestCase
         // Test the case where fromAlias is null
         $reflection = new \ReflectionClass($this->queryBuilder);
         $fromAliasProperty = $reflection->getProperty('fromAlias');
-        $fromAliasProperty->setAccessible(true);
 
         $this->queryBuilder->from('users', 'u');
         $fromAliasProperty->setValue($this->queryBuilder, null);

@@ -269,7 +269,6 @@ class LazyGhostProxyFactoryTest extends TestCase
             function ($entity, $field, $value) {
                 $reflection = new \ReflectionClass($entity);
                 $property = $reflection->getProperty($field);
-                $property->setAccessible(true);
 
                 // Handle UUID conversion for id field
                 if ($field === 'id' && is_string($value)) {

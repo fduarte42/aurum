@@ -21,9 +21,13 @@ class EntityMetadata implements EntityMetadataInterface
     /** @var array<string, AssociationMappingInterface> */
     private array $associationMappings = [];
 
-    private ?string $identifierFieldName = null;
+    /** @var array<string> */
+    private array $identifierFieldNames = [];
 
     private ?InheritanceMappingInterface $inheritanceMapping = null;
+
+    /** @var array<string, array<string>> */
+    private array $lifecycleCallbacks = [];
 
     public function __construct(
         private readonly string $className,
@@ -40,35 +44,6 @@ class EntityMetadata implements EntityMetadataInterface
     public function getTableName(): string
     {
         return $this->tableName;
-    }
-
-    public function addFieldMapping(FieldMappingInterface $fieldMapping): void
-    {
-        $this->fieldMappings[$fieldMapping->getFieldName()] = $fieldMapping;
-        
-        if ($fieldMapping->isIdentifier()) {
-            $this->identifierFieldName = $fieldMapping->getFieldName();
-        }
-    }
-
-    public function addAssociationMapping(AssociationMappingInterface $associationMapping): void
-    {
-        $this->associationMappings[$associationMapping->getFieldName()] = $associationMapping;
-    }
-
-    public function getIdentifierFieldName(): string
-    {
-        if ($this->identifierFieldName === null) {
-            throw ORMException::metadataNotFound("No identifier field found for {$this->className}");
-        }
-        
-        return $this->identifierFieldName;
-    }
-
-    public function getIdentifierColumnName(): string
-    {
-        $identifierField = $this->getIdentifierFieldName();
-        return $this->getFieldMapping($identifierField)?->getColumnName() ?? $identifierField;
     }
 
     public function getFieldMappings(): array
@@ -91,21 +66,97 @@ class EntityMetadata implements EntityMetadataInterface
         return $this->associationMappings[$fieldName] ?? null;
     }
 
-    public function isIdentifier(string $fieldName): bool
+    public function addFieldMapping(FieldMappingInterface $fieldMapping): void
     {
-        return $fieldName === $this->identifierFieldName;
+        $this->fieldMappings[$fieldMapping->getFieldName()] = $fieldMapping;
+        
+        if ($fieldMapping->isIdentifier()) {
+            if (!in_array($fieldMapping->getFieldName(), $this->identifierFieldNames, true)) {
+                $this->identifierFieldNames[] = $fieldMapping->getFieldName();
+            }
+        }
+    }
+
+    public function addAssociationMapping(AssociationMappingInterface $associationMapping): void
+    {
+        $this->associationMappings[$associationMapping->getFieldName()] = $associationMapping;
+    }
+
+    public function getIdentifierFieldNames(): array
+    {
+        if (empty($this->identifierFieldNames)) {
+            throw ORMException::noIdentifierFound($this->className);
+        }
+        
+        return $this->identifierFieldNames;
+    }
+
+    public function getIdentifierColumnNames(): array
+    {
+        $columnNames = [];
+        foreach ($this->getIdentifierFieldNames() as $fieldName) {
+            $columnNames[] = $this->getFieldMapping($fieldName)?->getColumnName() ?? $fieldName;
+        }
+        return $columnNames;
     }
 
     public function getIdentifierValue(object $entity): mixed
     {
-        $identifierField = $this->getIdentifierFieldName();
-        return $this->getFieldValue($entity, $identifierField);
+        $fieldNames = $this->getIdentifierFieldNames();
+        if (count($fieldNames) === 1) {
+            return $this->getFieldValue($entity, $fieldNames[0]);
+        }
+        
+        return $this->getIdentifierValues($entity);
+    }
+
+    public function getIdentifierValues(object $entity): array
+    {
+        $values = [];
+        foreach ($this->getIdentifierFieldNames() as $fieldName) {
+            $values[$fieldName] = $this->getFieldValue($entity, $fieldName);
+        }
+        return $values;
+    }
+
+    public function setIdentifierValues(object $entity, array $values): void
+    {
+        foreach ($values as $fieldName => $value) {
+            $this->setFieldValue($entity, $fieldName, $value);
+        }
     }
 
     public function setIdentifierValue(object $entity, mixed $value): void
     {
-        $identifierField = $this->getIdentifierFieldName();
-        $this->setFieldValue($entity, $identifierField, $value);
+        $fieldNames = $this->getIdentifierFieldNames();
+        if (count($fieldNames) === 1) {
+            $this->setFieldValue($entity, $fieldNames[0], $value);
+            return;
+        }
+
+        if (is_array($value)) {
+            $this->setIdentifierValues($entity, $value);
+            return;
+        }
+
+        throw new \InvalidArgumentException("Cannot set single identifier value for composite primary key");
+    }
+
+    public function isIdentifier(string $fieldName): bool
+    {
+        return in_array($fieldName, $this->identifierFieldNames, true);
+    }
+
+    public function getIdentifierColumnName(): string
+    {
+        $columns = $this->getIdentifierColumnNames();
+        return $columns[0] ?? '';
+    }
+
+    public function getIdentifierFieldName(): string
+    {
+        $fields = $this->getIdentifierFieldNames();
+        return $fields[0] ?? '';
     }
 
     public function getFieldValue(object $entity, string $fieldName): mixed
@@ -116,7 +167,6 @@ class EntityMetadata implements EntityMetadataInterface
         }
 
         $property = $this->getReflectionProperty($fieldName);
-        $property->setAccessible(true);
 
         // Check if property is initialized before accessing it
         if (!$property->isInitialized($entity)) {
@@ -162,7 +212,6 @@ class EntityMetadata implements EntityMetadataInterface
         }
 
         $property = $this->getReflectionProperty($fieldName);
-        $property->setAccessible(true);
 
         // Convert database value to PHP value if we have a field mapping
         $fieldMapping = $this->getFieldMapping($fieldName);
@@ -179,7 +228,6 @@ class EntityMetadata implements EntityMetadataInterface
     public function setFieldValueFromMultipleColumns(object $entity, string $fieldName, array $columnValues): void
     {
         $property = $this->getReflectionProperty($fieldName);
-        $property->setAccessible(true);
 
         $fieldMapping = $this->getFieldMapping($fieldName);
         if ($fieldMapping !== null && $fieldMapping->isMultiColumn()) {
@@ -310,6 +358,34 @@ class EntityMetadata implements EntityMetadataInterface
         );
 
         $this->fieldMappings['__discriminator'] = $discriminatorFieldMapping;
+    }
+
+    public function getLifecycleCallbacks(string $eventName): array
+    {
+        return $this->lifecycleCallbacks[$eventName] ?? [];
+    }
+
+    public function hasLifecycleCallbacks(string $eventName): bool
+    {
+        return isset($this->lifecycleCallbacks[$eventName]) && !empty($this->lifecycleCallbacks[$eventName]);
+    }
+
+    public function addLifecycleCallback(string $eventName, string $methodName): void
+    {
+        if (!isset($this->lifecycleCallbacks[$eventName])) {
+            $this->lifecycleCallbacks[$eventName] = [];
+        }
+        
+        if (!in_array($methodName, $this->lifecycleCallbacks[$eventName], true)) {
+            $this->lifecycleCallbacks[$eventName][] = $methodName;
+        }
+    }
+
+    public function invokeLifecycleCallbacks(string $eventName, object $entity, array $args = []): void
+    {
+        foreach ($this->getLifecycleCallbacks($eventName) as $methodName) {
+            $entity->$methodName(...$args);
+        }
     }
 
     private function getReflectionProperty(string $fieldName): ReflectionProperty

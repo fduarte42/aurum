@@ -250,6 +250,7 @@ class TodoAppTest extends TestCase
         // Create new unit of work with savepoint
         $uow2 = $this->entityManager->createUnitOfWork();
         $this->entityManager->setUnitOfWork($uow2);
+        $uow2->createSavepoint(); // Manually create savepoint to control it
         $this->entityManager->persist($todo2);
         
         try {

@@ -113,12 +113,15 @@ class MariaDbDriver extends AbstractDatabaseDriver
 
     public function getDefaultPDOOptions(): array
     {
-        return array_merge(parent::getDefaultPDOOptions(), [
+        $options = [
             // MariaDB/MySQL-specific options
-            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci",
-            PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true,
-            PDO::MYSQL_ATTR_FOUND_ROWS => true,
-        ]);
+            // Use new constants if available (PHP 8.5+), fallback to old ones for PHP 8.4
+            (defined('Pdo\Mysql::ATTR_INIT_COMMAND') ? \Pdo\Mysql::ATTR_INIT_COMMAND : PDO::MYSQL_ATTR_INIT_COMMAND) => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci",
+            (defined('Pdo\Mysql::ATTR_USE_BUFFERED_QUERY') ? \Pdo\Mysql::ATTR_USE_BUFFERED_QUERY : PDO::MYSQL_ATTR_USE_BUFFERED_QUERY) => true,
+            (defined('Pdo\Mysql::ATTR_FOUND_ROWS') ? \Pdo\Mysql::ATTR_FOUND_ROWS : PDO::MYSQL_ATTR_FOUND_ROWS) => true,
+        ];
+
+        return array_merge(parent::getDefaultPDOOptions(), $options);
     }
 
     /**

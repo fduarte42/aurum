@@ -58,7 +58,6 @@ class QueryBuilderInheritanceTest extends TestCase
 
         // Manually call the inheritance condition method to test it
         $reflectionMethod = new \ReflectionMethod($this->queryBuilder, 'addInheritanceDiscriminatorCondition');
-        $reflectionMethod->setAccessible(true);
         $reflectionMethod->invoke($this->queryBuilder, $metadata, 'v');
 
         $sql = $this->queryBuilder->getSQL();
@@ -99,7 +98,6 @@ class QueryBuilderInheritanceTest extends TestCase
 
         // Manually call the inheritance condition method to test it
         $reflectionMethod = new \ReflectionMethod($this->queryBuilder, 'addInheritanceDiscriminatorCondition');
-        $reflectionMethod->setAccessible(true);
         $reflectionMethod->invoke($this->queryBuilder, $metadata, 'c');
 
         $sql = $this->queryBuilder->getSQL();
@@ -271,7 +269,6 @@ class QueryBuilderInheritanceTest extends TestCase
 
         // Manually call the inheritance condition method to test it
         $reflectionMethod = new \ReflectionMethod($this->queryBuilder, 'addInheritanceDiscriminatorCondition');
-        $reflectionMethod->setAccessible(true);
         $reflectionMethod->invoke($this->queryBuilder, $metadata, 'v');
 
         $sql = $this->queryBuilder->getSQL();

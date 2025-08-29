@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Fduarte42\Aurum\Repository;
 
 use Fduarte42\Aurum\EntityManagerInterface;
+use Fduarte42\Aurum\Hydration\EntityHydratorInterface;
 use Fduarte42\Aurum\Metadata\EntityMetadataInterface;
 use Fduarte42\Aurum\Query\QueryBuilder;
 use Fduarte42\Aurum\Query\QueryBuilderInterface;
@@ -22,6 +23,7 @@ class Repository implements RepositoryInterface
     protected EntityManagerInterface $entityManager;
     protected EntityMetadataInterface $metadata;
     protected ?ContainerInterface $container = null;
+    protected ?EntityHydratorInterface $entityHydrator = null;
 
     /**
      * Parameterless constructor for dependency injection
@@ -65,6 +67,14 @@ class Repository implements RepositoryInterface
     }
 
     /**
+     * Set the entity hydrator (for dependency injection)
+     */
+    public function setEntityHydrator(?EntityHydratorInterface $entityHydrator): void
+    {
+        $this->entityHydrator = $entityHydrator;
+    }
+
+    /**
      * Check if all required dependencies are injected
      */
     protected function ensureDependenciesInjected(): void
@@ -77,6 +87,9 @@ class Repository implements RepositoryInterface
         }
         if (!isset($this->metadata)) {
             throw new \RuntimeException('Repository metadata not set. Ensure dependency injection is properly configured.');
+        }
+        if (!isset($this->entityHydrator)) {
+            throw new \RuntimeException('Repository entityHydrator not set. Ensure dependency injection is properly configured.');
         }
     }
 
@@ -144,7 +157,8 @@ class Repository implements RepositoryInterface
         $this->ensureDependenciesInjected();
         $qb = new QueryBuilder(
             $this->entityManager->getConnection(),
-            $this->entityManager->getMetadataFactory()
+            $this->entityManager->getMetadataFactory(),
+            $this->entityHydrator
         );
 
         // Set the root entity class for automatic join resolution
@@ -335,13 +349,20 @@ class Repository implements RepositoryInterface
      */
     private function hydrateResults(array|\PDOStatement $results): array
     {
-        $entities = [];
+        $this->ensureDependenciesInjected();
 
+        $dataArray = [];
         foreach ($results as $result) {
-            $entities[] = $this->hydrateEntity($result);
+            $dataArray[] = $result;
         }
 
-        return $entities;
+        // Use the centralized EntityHydrator to hydrate multiple entities
+        return $this->entityHydrator->hydrateMultiple(
+            $dataArray,
+            $this->className,
+            true, // managed entities
+            $this->entityManager->getCurrentUnitOfWork()
+        );
     }
 
     /**
@@ -351,54 +372,12 @@ class Repository implements RepositoryInterface
     {
         $this->ensureDependenciesInjected();
 
-        // Determine the correct entity class for inheritance hierarchies
-        $entityClass = $this->className;
-        $metadata = $this->metadata;
-
-        if ($this->metadata->hasInheritance()) {
-            $inheritanceMapping = $this->metadata->getInheritanceMapping();
-            $discriminatorColumn = $inheritanceMapping->getDiscriminatorColumn();
-
-            // Check if discriminator value is present in the data
-            if (isset($data[$discriminatorColumn]) || isset($data['__discriminator'])) {
-                $discriminatorValue = $data[$discriminatorColumn] ?? $data['__discriminator'];
-                $actualEntityClass = $inheritanceMapping->getClassNameForDiscriminatorValue($discriminatorValue);
-
-                if ($actualEntityClass !== $entityClass && class_exists($actualEntityClass)) {
-                    $entityClass = $actualEntityClass;
-                    $metadata = $this->entityManager->getMetadataFactory()->getMetadataFor($entityClass);
-                }
-            }
-        }
-
-        $entity = $metadata->newInstance();
-        
-        foreach ($metadata->getFieldMappings() as $fieldMapping) {
-            $fieldName = $fieldMapping->getFieldName();
-            $columnName = $fieldMapping->getColumnName();
-
-            // Skip discriminator field as it's virtual
-            if ($fieldName === '__discriminator') {
-                continue;
-            }
-
-            if (isset($data[$fieldName])) {
-                // Data is already mapped by field name (from query builder)
-                $metadata->setFieldValue($entity, $fieldName, $data[$fieldName]);
-            } elseif (isset($data[$columnName])) {
-                // Data is mapped by column name (from raw SQL)
-                $metadata->setFieldValue($entity, $fieldName, $data[$columnName]);
-            }
-        }
-
-        // Add to unit of work if it has an identifier
-        $id = $this->metadata->getIdentifierValue($entity);
-        if ($id !== null) {
-            // Use manage() instead of persist() to handle existing entities properly
-            return $this->entityManager->manage($entity);
-        }
-
-        return $entity;
+        // Use the centralized EntityHydrator to hydrate managed entities
+        return $this->entityHydrator->hydrateManaged(
+            $data,
+            $this->className,
+            $this->entityManager->getCurrentUnitOfWork()
+        );
     }
 
     /**

@@ -7,6 +7,14 @@ namespace Fduarte42\Aurum\Metadata;
 use Fduarte42\Aurum\Attribute\Column;
 use Fduarte42\Aurum\Attribute\DiscriminatorColumn;
 use Fduarte42\Aurum\Attribute\Entity;
+use Fduarte42\Aurum\Attribute\HasLifecycleCallbacks;
+use Fduarte42\Aurum\Attribute\PrePersist;
+use Fduarte42\Aurum\Attribute\PostPersist;
+use Fduarte42\Aurum\Attribute\PreUpdate;
+use Fduarte42\Aurum\Attribute\PostUpdate;
+use Fduarte42\Aurum\Attribute\PreRemove;
+use Fduarte42\Aurum\Attribute\PostRemove;
+use Fduarte42\Aurum\Attribute\PostLoad;
 use Fduarte42\Aurum\Attribute\Id;
 use Fduarte42\Aurum\Attribute\InheritanceType;
 use Fduarte42\Aurum\Attribute\JoinColumn;
@@ -85,7 +93,37 @@ class MetadataFactory
             $this->processProperty($metadata, $property);
         }
 
+        // Process lifecycle callbacks
+        $this->processLifecycleCallbacks($metadata, $reflectionClass);
+
         return $metadata;
+    }
+
+    private function processLifecycleCallbacks(EntityMetadata $metadata, ReflectionClass $reflectionClass): void
+    {
+        // Check if class has HasLifecycleCallbacks attribute
+        $hasLifecycleCallbacksAttributes = $reflectionClass->getAttributes(HasLifecycleCallbacks::class);
+        if (empty($hasLifecycleCallbacksAttributes)) {
+            return;
+        }
+
+        $callbackAttributes = [
+            PrePersist::class => 'prePersist',
+            PostPersist::class => 'postPersist',
+            PreUpdate::class => 'preUpdate',
+            PostUpdate::class => 'postUpdate',
+            PreRemove::class => 'preRemove',
+            PostRemove::class => 'postRemove',
+            PostLoad::class => 'postLoad',
+        ];
+
+        foreach ($reflectionClass->getMethods() as $method) {
+            foreach ($callbackAttributes as $attributeClass => $eventName) {
+                if (!empty($method->getAttributes($attributeClass))) {
+                    $metadata->addLifecycleCallback($eventName, $method->getName());
+                }
+            }
+        }
     }
 
     private function hasAssociationAttribute(ReflectionProperty $property): bool

@@ -6,6 +6,8 @@ namespace Fduarte42\Aurum\UnitOfWork;
 
 use Fduarte42\Aurum\Connection\ConnectionInterface;
 use Fduarte42\Aurum\Exception\ORMException;
+use Fduarte42\Aurum\Hydration\EntityHydratorInterface;
+use Fduarte42\Aurum\Metadata\EntityMetadataInterface;
 use Fduarte42\Aurum\Metadata\MetadataFactory;
 use Fduarte42\Aurum\Proxy\ProxyFactoryInterface;
 use Ramsey\Uuid\Uuid;
@@ -36,6 +38,9 @@ class UnitOfWork implements UnitOfWorkInterface
     /** @var array<string, array> Many-to-Many associations scheduled for deletion */
     private array $manyToManyDeletions = [];
 
+    /** @var array<int, array{entity: object, association: \Fduarte42\Aurum\Metadata\AssociationMappingInterface}> */
+    private array $delayedUpdates = [];
+
     private string $savepointName;
     private bool $savepointCreated = false;
 
@@ -43,6 +48,7 @@ class UnitOfWork implements UnitOfWorkInterface
         private readonly ConnectionInterface $connection,
         private readonly MetadataFactory $metadataFactory,
         private readonly ProxyFactoryInterface $proxyFactory,
+        private readonly EntityHydratorInterface $entityHydrator,
         private readonly string $unitOfWorkId
     ) {
         $this->savepointName = 'uow_' . $this->unitOfWorkId;
@@ -54,27 +60,38 @@ class UnitOfWork implements UnitOfWorkInterface
 
     public function persist(object $entity): void
     {
+        if ($this->contains($entity) || $this->entityInsertions->offsetExists($entity)) {
+            return;
+        }
+
         $className = $this->proxyFactory->getRealClass($entity);
         $metadata = $this->metadataFactory->getMetadataFor($className);
 
+        if (!$this->originalEntityData->offsetExists($entity)) {
+            $metadata->invokeLifecycleCallbacks('prePersist', $entity);
+        }
+
         $id = $metadata->getIdentifierValue($entity);
 
-        if ($id === null) {
-            // Generate UUID for new entities
-            $identifierMapping = $metadata->getFieldMapping($metadata->getIdentifierFieldName());
-            if ($identifierMapping && $identifierMapping->getGenerationStrategy() === 'UUID_TIME_BASED') {
-                $uuid = Uuid::uuid1();
-                $metadata->setIdentifierValue($entity, $uuid);
-                $id = $uuid;
+        if ($this->isIdentifierEmpty($id)) {
+            // Generate UUID for new entities if supported
+            $fieldNames = $metadata->getIdentifierFieldNames();
+            if (count($fieldNames) === 1) {
+                $identifierMapping = $metadata->getFieldMapping($fieldNames[0]);
+                if ($identifierMapping && $identifierMapping->getGenerationStrategy() === 'UUID_TIME_BASED') {
+                    $uuid = Uuid::uuid1();
+                    $metadata->setIdentifierValue($entity, $uuid);
+                    $id = $uuid;
+                }
             }
         }
 
-        if ($id !== null) {
-            $identityKey = $className . '.' . $id;
+        if (!$this->isIdentifierEmpty($id)) {
+            $identityKey = $this->getIdentifierKey($className, $id);
             $this->identityMap[$identityKey] = $entity;
         }
 
-        if (!$this->originalEntityData->contains($entity)) {
+        if (!$this->originalEntityData->offsetExists($entity)) {
             $this->entityInsertions[$entity] = true;
             $this->originalEntityData[$entity] = $this->extractEntityData($entity);
         }
@@ -89,8 +106,12 @@ class UnitOfWork implements UnitOfWorkInterface
             throw ORMException::entityNotManaged($entity);
         }
         
-        $this->entityInsertions->detach($entity);
-        $this->entityUpdates->detach($entity);
+        $className = $this->proxyFactory->getRealClass($entity);
+        $metadata = $this->metadataFactory->getMetadataFor($className);
+        $metadata->invokeLifecycleCallbacks('preRemove', $entity);
+
+        $this->entityInsertions->offsetUnset($entity);
+        $this->entityUpdates->offsetUnset($entity);
         $this->entityDeletions[$entity] = true;
     }
 
@@ -102,23 +123,29 @@ class UnitOfWork implements UnitOfWorkInterface
         
         $className = $this->proxyFactory->getRealClass($entity);
         $metadata = $this->metadataFactory->getMetadataFor($className);
-        $id = $metadata->getIdentifierValue($entity);
+        $id = $metadata->getIdentifierValues($entity);
         
-        if ($id === null) {
+        if ($this->isIdentifierEmpty($id)) {
             throw ORMException::entityNotFound($className, 'null');
         }
         
         // Load fresh data from database
+        $criteria = $this->getIdentifierCriteria($metadata, $id);
+        $where = [];
+        foreach (array_keys($criteria) as $column) {
+            $where[] = $this->connection->quoteIdentifier($column) . ' = :' . $column;
+        }
+
         $sql = sprintf(
-            'SELECT * FROM %s WHERE %s = :id',
+            'SELECT * FROM %s WHERE %s',
             $this->connection->quoteIdentifier($metadata->getTableName()),
-            $this->connection->quoteIdentifier($metadata->getIdentifierColumnName())
+            implode(' AND ', $where)
         );
         
-        $data = $this->connection->fetchOne($sql, ['id' => $id]);
+        $data = $this->connection->fetchOne($sql, $criteria);
         
         if ($data === null) {
-            throw ORMException::entityNotFound($className, $id);
+            throw ORMException::entityNotFound($className, json_encode($id));
         }
         
         // Update entity with fresh data
@@ -133,34 +160,37 @@ class UnitOfWork implements UnitOfWorkInterface
         $this->originalEntityData[$entity] = $this->extractEntityData($entity);
 
         // Remove from update queue
-        $this->entityUpdates->detach($entity);
+        $this->entityUpdates->offsetUnset($entity);
+
+        // Lifecycle callback: postLoad
+        $metadata->invokeLifecycleCallbacks('postLoad', $entity);
     }
 
     public function detach(object $entity): void
     {
         $className = $this->proxyFactory->getRealClass($entity);
         $metadata = $this->metadataFactory->getMetadataFor($className);
-        $id = $metadata->getIdentifierValue($entity);
+        $id = $metadata->getIdentifierValues($entity);
         
-        if ($id !== null) {
-            $identityKey = $className . '.' . $id;
+        if (!$this->isIdentifierEmpty($id)) {
+            $identityKey = $this->getIdentifierKey($className, $id);
             unset($this->identityMap[$identityKey]);
         }
         
-        $this->originalEntityData->detach($entity);
-        $this->entityInsertions->detach($entity);
-        $this->entityUpdates->detach($entity);
-        $this->entityDeletions->detach($entity);
+        $this->originalEntityData->offsetUnset($entity);
+        $this->entityInsertions->offsetUnset($entity);
+        $this->entityUpdates->offsetUnset($entity);
+        $this->entityDeletions->offsetUnset($entity);
     }
 
     public function contains(object $entity): bool
     {
-        return $this->originalEntityData->contains($entity);
+        return $this->originalEntityData->offsetExists($entity);
     }
 
     public function find(string $className, mixed $id): ?object
     {
-        $identityKey = $className . '.' . $id;
+        $identityKey = $this->getIdentifierKey($className, $id);
         
         // Check identity map first
         if (isset($this->identityMap[$identityKey])) {
@@ -169,14 +199,20 @@ class UnitOfWork implements UnitOfWorkInterface
         
         // Load from database
         $metadata = $this->metadataFactory->getMetadataFor($className);
+        $criteria = $this->getIdentifierCriteria($metadata, $id);
         
+        $where = [];
+        foreach (array_keys($criteria) as $column) {
+            $where[] = $this->connection->quoteIdentifier($column) . ' = :' . $column;
+        }
+
         $sql = sprintf(
-            'SELECT * FROM %s WHERE %s = :id',
+            'SELECT * FROM %s WHERE %s',
             $this->connection->quoteIdentifier($metadata->getTableName()),
-            $this->connection->quoteIdentifier($metadata->getIdentifierColumnName())
+            implode(' AND ', $where)
         );
         
-        $data = $this->connection->fetchOne($sql, ['id' => $id]);
+        $data = $this->connection->fetchOne($sql, $criteria);
         
         if ($data === null) {
             return null;
@@ -190,16 +226,24 @@ class UnitOfWork implements UnitOfWorkInterface
         $this->identityMap[$identityKey] = $entity;
         $this->originalEntityData[$entity] = $this->extractEntityData($entity);
         
+        // Lifecycle callback: postLoad
+        $metadata->invokeLifecycleCallbacks('postLoad', $entity);
+
         return $entity;
     }
 
     public function flush(): void
     {
+        $managedTransaction = false;
+        $createdSavepoint = false;
+
         if (!$this->connection->inTransaction()) {
-            throw ORMException::transactionNotActive();
+            $this->connection->beginTransaction();
+            $managedTransaction = true;
+        } elseif (!$this->savepointCreated) {
+            $this->createSavepoint();
+            $createdSavepoint = true;
         }
-        
-        $this->createSavepoint();
         
         try {
             // Process deletions first
@@ -214,6 +258,14 @@ class UnitOfWork implements UnitOfWorkInterface
             }
 
             // Detect and process updates
+            foreach ($this->originalEntityData as $entity) {
+                if (!$this->entityInsertions->offsetExists($entity) && !$this->entityDeletions->offsetExists($entity)) {
+                    $className = $this->proxyFactory->getRealClass($entity);
+                    $metadata = $this->metadataFactory->getMetadataFor($className);
+                    $metadata->invokeLifecycleCallbacks('preUpdate', $entity);
+                }
+            }
+            
             $this->computeChangeSets();
             foreach ($this->entityUpdates as $entity) {
                 $this->executeUpdate($entity);
@@ -222,15 +274,28 @@ class UnitOfWork implements UnitOfWorkInterface
             // Process Many-to-Many associations
             $this->processManyToManyAssociations();
 
+            // Process delayed updates for circular dependencies
+            $this->processDelayedUpdates();
+
             // Clear scheduled operations
             $this->entityInsertions = new \SplObjectStorage();
             $this->entityUpdates = new \SplObjectStorage();
             $this->entityDeletions = new \SplObjectStorage();
             $this->manyToManyInsertions = [];
             $this->manyToManyDeletions = [];
+
+            if ($managedTransaction) {
+                $this->connection->commit();
+            } elseif ($createdSavepoint) {
+                $this->releaseSavepoint();
+            }
             
         } catch (\Exception $e) {
-            $this->rollbackToSavepoint();
+            if ($managedTransaction) {
+                $this->connection->rollback();
+            } elseif ($createdSavepoint) {
+                $this->rollbackToSavepoint();
+            }
             throw $e;
         }
     }
@@ -252,6 +317,19 @@ class UnitOfWork implements UnitOfWorkInterface
     public function getSavepointName(): string
     {
         return $this->savepointName;
+    }
+
+    public function registerManaged(object $entity, mixed $id, array $data): void
+    {
+        $className = $this->proxyFactory->getRealClass($entity);
+        $identityKey = $this->getIdentifierKey($className, $id);
+        
+        $this->identityMap[$identityKey] = $entity;
+        $this->originalEntityData[$entity] = $data;
+
+        // Lifecycle callback: postLoad
+        $metadata = $this->metadataFactory->getMetadataFor($className);
+        $metadata->invokeLifecycleCallbacks('postLoad', $entity);
     }
 
     public function addToIdentityMap(string $identityKey, object $entity): void
@@ -326,34 +404,23 @@ class UnitOfWork implements UnitOfWorkInterface
 
     private function extractEntityData(object $entity): array
     {
-        $className = $this->proxyFactory->getRealClass($entity);
-        $metadata = $this->metadataFactory->getMetadataFor($className);
-        
-        $data = [];
-        foreach ($metadata->getFieldMappings() as $fieldMapping) {
-            $data[$fieldMapping->getFieldName()] = $metadata->getFieldValue($entity, $fieldMapping->getFieldName());
-        }
-        
-        return $data;
+        // Use the centralized EntityHydrator to extract entity data
+        return $this->entityHydrator->extractEntityData($entity);
     }
 
     private function populateEntity(object $entity, array $data): void
     {
         $className = $this->proxyFactory->getRealClass($entity);
         $metadata = $this->metadataFactory->getMetadataFor($className);
-        
-        foreach ($metadata->getFieldMappings() as $fieldMapping) {
-            $columnName = $fieldMapping->getColumnName();
-            if (isset($data[$columnName])) {
-                $metadata->setFieldValue($entity, $fieldMapping->getFieldName(), $data[$columnName]);
-            }
-        }
+
+        // Use the centralized EntityHydrator to populate the entity
+        $this->entityHydrator->populateEntity($entity, $data, $metadata);
     }
 
     private function computeChangeSets(): void
     {
         foreach ($this->originalEntityData as $entity) {
-            if ($this->entityInsertions->contains($entity) || $this->entityDeletions->contains($entity)) {
+            if ($this->entityInsertions->offsetExists($entity) || $this->entityDeletions->offsetExists($entity)) {
                 continue;
             }
 
@@ -376,6 +443,11 @@ class UnitOfWork implements UnitOfWorkInterface
         // Process regular field mappings
         foreach ($metadata->getFieldMappings() as $fieldMapping) {
             $value = $metadata->getFieldValue($entity, $fieldMapping->getFieldName());
+
+            // Skip generated identifier if it's null (DB will generate it)
+            if ($fieldMapping->isIdentifier() && $fieldMapping->isGenerated() && $value === null) {
+                continue;
+            }
 
             if ($fieldMapping->isMultiColumn()) {
                 // Handle multi-column mappings
@@ -403,7 +475,7 @@ class UnitOfWork implements UnitOfWorkInterface
 
                     // Get the referenced value (usually the ID)
                     $referencedColumn = $association->getReferencedColumnName();
-                    if ($referencedColumn === 'id' || $referencedColumn === $relatedMetadata->getIdentifierColumnName()) {
+                    if ($referencedColumn === 'id' || in_array($referencedColumn, $relatedMetadata->getIdentifierColumnNames(), true)) {
                         $referencedValue = $relatedMetadata->getIdentifierValue($relatedEntity);
                     } else {
                         // For non-ID references, find the field mapping
@@ -414,6 +486,11 @@ class UnitOfWork implements UnitOfWorkInterface
                                 break;
                             }
                         }
+                    }
+
+                    if ($referencedValue === null && $this->entityInsertions->offsetExists($relatedEntity)) {
+                        // Delayed update needed because of circular dependency
+                        $this->delayedUpdates[] = ['entity' => $entity, 'association' => $association];
                     }
 
                     $data[$joinColumn] = $referencedValue;
@@ -438,8 +515,23 @@ class UnitOfWork implements UnitOfWorkInterface
 
         $this->connection->execute($sql, $data);
 
+        // If identifier is generated and was null, fetch last insert ID
+        $idFieldNames = $metadata->getIdentifierFieldNames();
+        if (count($idFieldNames) === 1) {
+            $idFieldName = $idFieldNames[0];
+            $idFieldMapping = $metadata->getFieldMapping($idFieldName);
+            if ($idFieldMapping->isGenerated() && $metadata->getFieldValue($entity, $idFieldName) === null) {
+                $lastId = $this->connection->lastInsertId();
+                $convertedId = $idFieldMapping->convertToPHPValue($lastId);
+                $metadata->setFieldValue($entity, $idFieldName, $convertedId);
+            }
+        }
+
         // Update original data
         $this->originalEntityData[$entity] = $this->extractEntityData($entity);
+
+        // Lifecycle callback: postPersist
+        $metadata->invokeLifecycleCallbacks('postPersist', $entity);
     }
 
     private function executeUpdate(object $entity): void
@@ -487,8 +579,14 @@ class UnitOfWork implements UnitOfWorkInterface
 
                     // Get the referenced value (usually the ID)
                     $referencedColumn = $association->getReferencedColumnName();
-                    if ($referencedColumn === 'id' || $referencedColumn === $relatedMetadata->getIdentifierColumnName()) {
+                    if ($referencedColumn === 'id' || in_array($referencedColumn, $relatedMetadata->getIdentifierColumnNames(), true)) {
                         $referencedValue = $relatedMetadata->getIdentifierValue($relatedEntity);
+                        // If it's a composite key, we currently only support single-column foreign keys
+                        // as specified by the joinColumn attribute.
+                        if (is_array($referencedValue)) {
+                            // Try to find the specific column in the composite identifier
+                            $referencedValue = $referencedValue[$referencedColumn] ?? reset($referencedValue);
+                        }
                     } else {
                         // For non-ID references, find the field mapping
                         $referencedValue = null;
@@ -512,21 +610,30 @@ class UnitOfWork implements UnitOfWorkInterface
             }
         }
 
-        $id = $metadata->getIdentifierValue($entity);
-        $data[$metadata->getIdentifierColumnName()] = $id;
+        $id = $metadata->getIdentifierValues($entity);
+        $criteria = $this->getIdentifierCriteria($metadata, $id);
+        
+        $where = [];
+        foreach ($criteria as $column => $value) {
+            $paramName = 'pk_' . $column;
+            $where[] = $this->connection->quoteIdentifier($column) . ' = :' . $paramName;
+            $data[$paramName] = $value;
+        }
 
         $sql = sprintf(
-            'UPDATE %s SET %s WHERE %s = :%s',
+            'UPDATE %s SET %s WHERE %s',
             $this->connection->quoteIdentifier($metadata->getTableName()),
             implode(', ', $setParts),
-            $this->connection->quoteIdentifier($metadata->getIdentifierColumnName()),
-            $metadata->getIdentifierColumnName()
+            implode(' AND ', $where)
         );
 
         $this->connection->execute($sql, $data);
 
         // Update original data
         $this->originalEntityData[$entity] = $this->extractEntityData($entity);
+
+        // Lifecycle callback: postUpdate
+        $metadata->invokeLifecycleCallbacks('postUpdate', $entity);
     }
 
     private function executeDelete(object $entity): void
@@ -534,20 +641,29 @@ class UnitOfWork implements UnitOfWorkInterface
         $className = $this->proxyFactory->getRealClass($entity);
         $metadata = $this->metadataFactory->getMetadataFor($className);
         
-        $id = $metadata->getIdentifierValue($entity);
-        
+        $id = $metadata->getIdentifierValues($entity);
+        $criteria = $this->getIdentifierCriteria($metadata, $id);
+
+        $where = [];
+        foreach (array_keys($criteria) as $column) {
+            $where[] = $this->connection->quoteIdentifier($column) . ' = :' . $column;
+        }
+
         $sql = sprintf(
-            'DELETE FROM %s WHERE %s = :id',
+            'DELETE FROM %s WHERE %s',
             $this->connection->quoteIdentifier($metadata->getTableName()),
-            $this->connection->quoteIdentifier($metadata->getIdentifierColumnName())
+            implode(' AND ', $where)
         );
         
-        $this->connection->execute($sql, ['id' => $id]);
+        $this->connection->execute($sql, $criteria);
         
         // Remove from identity map and tracking
-        $identityKey = $className . '.' . $id;
+        $identityKey = $this->getIdentifierKey($className, $id);
         unset($this->identityMap[$identityKey]);
-        $this->originalEntityData->detach($entity);
+        $this->originalEntityData->offsetUnset($entity);
+
+        // Lifecycle callback: postRemove
+        $metadata->invokeLifecycleCallbacks('postRemove', $entity);
     }
 
     /**
@@ -671,8 +787,11 @@ class UnitOfWork implements UnitOfWorkInterface
         $relatedMetadata = $this->metadataFactory->getMetadataFor($relatedClassName);
 
         // Get the value from the referenced column (usually the ID)
-        if ($referencedColumn === 'id' || $referencedColumn === $relatedMetadata->getIdentifierColumnName()) {
+        if ($referencedColumn === 'id' || in_array($referencedColumn, $relatedMetadata->getIdentifierColumnNames(), true)) {
             $referencedValue = $relatedMetadata->getIdentifierValue($relatedEntity);
+            if (is_array($referencedValue)) {
+                $referencedValue = $referencedValue[$referencedColumn] ?? reset($referencedValue);
+            }
         } else {
             // For non-ID references, we need to find the field mapping
             foreach ($relatedMetadata->getFieldMappings() as $fieldMapping) {
@@ -741,7 +860,7 @@ class UnitOfWork implements UnitOfWorkInterface
         $visiting = new \SplObjectStorage();
 
         foreach ($entities as $entity) {
-            if (!$visited->contains($entity)) {
+            if (!$visited->offsetExists($entity)) {
                 $this->topologicalSortVisit($entity, $dependencies, $visited, $visiting, $sorted);
             }
         }
@@ -759,11 +878,11 @@ class UnitOfWork implements UnitOfWorkInterface
         $dependencies = [];
 
         foreach ($metadata->getAssociationMappings() as $association) {
-            if ($association->getType() === 'ManyToOne' && $association->isOwningSide()) {
+            if ($association->isOwningSide() && $association->getJoinColumn() !== null) {
                 $fieldName = $association->getFieldName();
                 $relatedEntity = $metadata->getFieldValue($entity, $fieldName);
 
-                if ($relatedEntity !== null && $this->entityInsertions->contains($relatedEntity)) {
+                if ($relatedEntity !== null && $this->entityInsertions->offsetExists($relatedEntity)) {
                     $dependencies[] = $relatedEntity;
                 }
             }
@@ -782,24 +901,88 @@ class UnitOfWork implements UnitOfWorkInterface
         \SplObjectStorage $visiting,
         array &$sorted
     ): void {
-        if ($visiting->contains($entity)) {
+        if ($visiting->offsetExists($entity)) {
             // Circular dependency detected - this is okay for auto-persist
             return;
         }
 
-        if ($visited->contains($entity)) {
+        if ($visited->offsetExists($entity)) {
             return;
         }
 
-        $visiting->attach($entity);
+        $visiting->offsetSet($entity);
 
         foreach ($dependencies[$entity] as $dependency) {
             $this->topologicalSortVisit($dependency, $dependencies, $visited, $visiting, $sorted);
         }
 
-        $visiting->detach($entity);
-        $visited->attach($entity);
+        $visiting->offsetUnset($entity);
+        $visited->offsetSet($entity);
         $sorted[] = $entity;
+    }
+
+    /**
+     * Process delayed updates for circular dependencies
+     */
+    private function processDelayedUpdates(): void
+    {
+        foreach ($this->delayedUpdates as $delayed) {
+            $entity = $delayed['entity'];
+            $association = $delayed['association'];
+
+            $className = $this->proxyFactory->getRealClass($entity);
+            $metadata = $this->metadataFactory->getMetadataFor($className);
+
+            $fieldName = $association->getFieldName();
+            $relatedEntity = $metadata->getFieldValue($entity, $fieldName);
+
+            if ($relatedEntity !== null) {
+                $relatedClassName = $this->proxyFactory->getRealClass($relatedEntity);
+                $relatedMetadata = $this->metadataFactory->getMetadataFor($relatedClassName);
+
+                // Get the referenced value (usually the ID)
+                $referencedColumn = $association->getReferencedColumnName();
+                if ($referencedColumn === 'id' || in_array($referencedColumn, $relatedMetadata->getIdentifierColumnNames(), true)) {
+                    $referencedValue = $relatedMetadata->getIdentifierValue($relatedEntity);
+                } else {
+                    $referencedValue = null;
+                    foreach ($relatedMetadata->getFieldMappings() as $fieldMapping) {
+                        if ($fieldMapping->getColumnName() === $referencedColumn) {
+                            $referencedValue = $relatedMetadata->getFieldValue($relatedEntity, $fieldMapping->getFieldName());
+                            break;
+                        }
+                    }
+                }
+
+                if ($referencedValue !== null) {
+                    $joinColumn = $association->getJoinColumn();
+                    $id = $metadata->getIdentifierValues($entity);
+                    $criteria = $this->getIdentifierCriteria($metadata, $id);
+
+                    $where = [];
+                    $params = [
+                        'val' => $referencedValue,
+                    ];
+                    
+                    foreach ($criteria as $column => $value) {
+                        $paramName = 'pk_' . $column;
+                        $where[] = $this->connection->quoteIdentifier($column) . ' = :' . $paramName;
+                        $params[$paramName] = $value;
+                    }
+
+                    $sql = sprintf(
+                        'UPDATE %s SET %s = :val WHERE %s',
+                        $this->connection->quoteIdentifier($metadata->getTableName()),
+                        $this->connection->quoteIdentifier($joinColumn),
+                        implode(' AND ', $where)
+                    );
+
+                    $this->connection->execute($sql, $params);
+                }
+            }
+        }
+
+        $this->delayedUpdates = [];
     }
 
     /**
@@ -887,5 +1070,53 @@ class UnitOfWork implements UnitOfWorkInterface
         }
 
         return $default;
+    }
+
+    public function getIdentifierKey(string $className, mixed $id): string
+    {
+        if (!is_array($id)) {
+            $metadata = $this->metadataFactory->getMetadataFor($className);
+            $id = [$metadata->getIdentifierFieldName() => $id];
+        }
+        
+        // Ensure values are strings if they are objects (like UUIDs) for consistent JSON encoding
+        foreach ($id as $key => $value) {
+            if (is_object($value) && method_exists($value, '__toString')) {
+                $id[$key] = (string) $value;
+            }
+        }
+
+        ksort($id);
+        return $className . '.' . json_encode($id);
+    }
+
+    private function isIdentifierEmpty(mixed $id): bool
+    {
+        if ($id === null) {
+            return true;
+        }
+        if (is_array($id)) {
+            foreach ($id as $val) {
+                if ($val !== null) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private function getIdentifierCriteria(EntityMetadataInterface $metadata, mixed $id): array
+    {
+        if (is_array($id)) {
+            $criteria = [];
+            foreach ($metadata->getIdentifierFieldNames() as $fieldName) {
+                $columnName = $metadata->getFieldMapping($fieldName)->getColumnName();
+                $criteria[$columnName] = $id[$fieldName] ?? $id[$columnName] ?? null;
+            }
+            return $criteria;
+        }
+
+        return [$metadata->getIdentifierColumnName() => $id];
     }
 }

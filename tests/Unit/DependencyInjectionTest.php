@@ -281,7 +281,6 @@ class DependencyInjectionTest extends TestCase
         // Use reflection to test private registerConnection method
         $reflection = new \ReflectionClass($provider);
         $method = $reflection->getMethod('registerConnection');
-        $method->setAccessible(true);
 
         $method->invoke($provider, $container);
 
@@ -297,12 +296,10 @@ class DependencyInjectionTest extends TestCase
         // First register the type system (dependency of metadata factory)
         $reflection = new \ReflectionClass($provider);
         $typeSystemMethod = $reflection->getMethod('registerTypeSystem');
-        $typeSystemMethod->setAccessible(true);
         $typeSystemMethod->invoke($provider, $container);
 
         // Then register metadata factory
         $method = $reflection->getMethod('registerMetadataFactory');
-        $method->setAccessible(true);
         $method->invoke($provider, $container);
 
         $this->assertTrue($container->has(MetadataFactory::class));
@@ -314,10 +311,13 @@ class DependencyInjectionTest extends TestCase
         $provider = new ORMServiceProvider($config);
         $container = new SimpleContainer();
 
+        // Register required dependencies first
+        $this->registerConnectionDependency($container);
+        $this->registerMetadataFactoryDependency($container);
+
         // Use reflection to test private registerProxyFactory method
         $reflection = new \ReflectionClass($provider);
         $method = $reflection->getMethod('registerProxyFactory');
-        $method->setAccessible(true);
 
         $method->invoke($provider, $container);
 
@@ -340,24 +340,22 @@ class DependencyInjectionTest extends TestCase
         $reflection = new \ReflectionClass($provider);
 
         $registerConnection = $reflection->getMethod('registerConnection');
-        $registerConnection->setAccessible(true);
         $registerConnection->invoke($provider, $container);
 
         $registerTypeSystem = $reflection->getMethod('registerTypeSystem');
-        $registerTypeSystem->setAccessible(true);
         $registerTypeSystem->invoke($provider, $container);
 
         $registerMetadata = $reflection->getMethod('registerMetadataFactory');
-        $registerMetadata->setAccessible(true);
         $registerMetadata->invoke($provider, $container);
 
+        $registerEntityHydrator = $reflection->getMethod('registerEntityHydrator');
+        $registerEntityHydrator->invoke($provider, $container);
+
         $registerProxy = $reflection->getMethod('registerProxyFactory');
-        $registerProxy->setAccessible(true);
         $registerProxy->invoke($provider, $container);
 
         // Now test registerEntityManager
         $registerEM = $reflection->getMethod('registerEntityManager');
-        $registerEM->setAccessible(true);
         $registerEM->invoke($provider, $container);
 
         $this->assertTrue($container->has(EntityManagerInterface::class));
@@ -419,7 +417,6 @@ class DependencyInjectionTest extends TestCase
         // Test that the provider works with Laravel-style container
         $reflection = new \ReflectionClass($provider);
         $method = $reflection->getMethod('registerConnection');
-        $method->setAccessible(true);
         $method->invoke($provider, $container);
 
         $this->assertTrue($container->has(ConnectionInterface::class));
@@ -440,7 +437,6 @@ class DependencyInjectionTest extends TestCase
         // Test that the provider works with generic container
         $reflection = new \ReflectionClass($provider);
         $method = $reflection->getMethod('registerConnection');
-        $method->setAccessible(true);
         $method->invoke($provider, $container);
 
         $this->assertTrue($container->has(ConnectionInterface::class));
@@ -494,23 +490,21 @@ class DependencyInjectionTest extends TestCase
         $reflection = new \ReflectionClass($provider);
 
         $registerConnection = $reflection->getMethod('registerConnection');
-        $registerConnection->setAccessible(true);
         $registerConnection->invoke($provider, $container);
 
         $registerTypeSystem = $reflection->getMethod('registerTypeSystem');
-        $registerTypeSystem->setAccessible(true);
         $registerTypeSystem->invoke($provider, $container);
 
         $registerMetadata = $reflection->getMethod('registerMetadataFactory');
-        $registerMetadata->setAccessible(true);
         $registerMetadata->invoke($provider, $container);
 
+        $registerEntityHydrator = $reflection->getMethod('registerEntityHydrator');
+        $registerEntityHydrator->invoke($provider, $container);
+
         $registerProxy = $reflection->getMethod('registerProxyFactory');
-        $registerProxy->setAccessible(true);
         $registerProxy->invoke($provider, $container);
 
         $registerEM = $reflection->getMethod('registerEntityManager');
-        $registerEM->setAccessible(true);
         $registerEM->invoke($provider, $container);
 
         // Verify services were registered
@@ -549,11 +543,9 @@ class DependencyInjectionTest extends TestCase
         $reflection = new \ReflectionClass($provider);
 
         $registerMetadata = $reflection->getMethod('registerMetadataFactory');
-        $registerMetadata->setAccessible(true);
         $registerMetadata->invoke($provider, $container);
 
         $registerProxy = $reflection->getMethod('registerProxyFactory');
-        $registerProxy->setAccessible(true);
         $registerProxy->invoke($provider, $container);
 
         $this->assertTrue($container->has(MetadataFactory::class));
@@ -588,11 +580,9 @@ class DependencyInjectionTest extends TestCase
         $reflection = new \ReflectionClass($provider);
 
         $registerMetadata = $reflection->getMethod('registerMetadataFactory');
-        $registerMetadata->setAccessible(true);
         $registerMetadata->invoke($provider, $container);
 
         $registerProxy = $reflection->getMethod('registerProxyFactory');
-        $registerProxy->setAccessible(true);
         $registerProxy->invoke($provider, $container);
 
         $this->assertTrue($container->has(MetadataFactory::class));
@@ -620,11 +610,9 @@ class DependencyInjectionTest extends TestCase
         $reflection = new \ReflectionClass($provider);
 
         $registerMetadata = $reflection->getMethod('registerMetadataFactory');
-        $registerMetadata->setAccessible(true);
         $registerMetadata->invoke($provider, $container);
 
         $registerProxy = $reflection->getMethod('registerProxyFactory');
-        $registerProxy->setAccessible(true);
         $registerProxy->invoke($provider, $container);
 
         // These should not throw exceptions even with basic container
@@ -647,7 +635,6 @@ class DependencyInjectionTest extends TestCase
         // Use reflection to test private registerConnection method
         $reflection = new \ReflectionClass($provider);
         $method = $reflection->getMethod('registerConnection');
-        $method->setAccessible(true);
         $method->invoke($provider, $container);
 
         $this->assertTrue($container->has(ConnectionInterface::class));
@@ -661,12 +648,10 @@ class DependencyInjectionTest extends TestCase
         // First register the type system (dependency of metadata factory)
         $reflection = new \ReflectionClass($provider);
         $typeSystemMethod = $reflection->getMethod('registerTypeSystem');
-        $typeSystemMethod->setAccessible(true);
         $typeSystemMethod->invoke($provider, $container);
 
         // Then register metadata factory
         $method = $reflection->getMethod('registerMetadataFactory');
-        $method->setAccessible(true);
         $method->invoke($provider, $container);
 
         $this->assertTrue($container->has(MetadataFactory::class));
@@ -677,10 +662,13 @@ class DependencyInjectionTest extends TestCase
         $provider = new ORMServiceProvider();
         $container = new ContainerBuilder(); // This extends DI\Container
 
+        // Register required dependencies first
+        $this->registerConnectionDependencyForDI($container);
+        $this->registerMetadataFactoryDependencyForDI($container);
+
         // Use reflection to test private registerProxyFactory method
         $reflection = new \ReflectionClass($provider);
         $method = $reflection->getMethod('registerProxyFactory');
-        $method->setAccessible(true);
         $method->invoke($provider, $container);
 
         $this->assertTrue($container->has(ProxyFactoryInterface::class));
@@ -702,23 +690,21 @@ class DependencyInjectionTest extends TestCase
         $reflection = new \ReflectionClass($provider);
 
         $registerConnection = $reflection->getMethod('registerConnection');
-        $registerConnection->setAccessible(true);
         $registerConnection->invoke($provider, $container);
 
         $registerTypeSystem = $reflection->getMethod('registerTypeSystem');
-        $registerTypeSystem->setAccessible(true);
         $registerTypeSystem->invoke($provider, $container);
 
         $registerMetadata = $reflection->getMethod('registerMetadataFactory');
-        $registerMetadata->setAccessible(true);
         $registerMetadata->invoke($provider, $container);
 
+        $registerEntityHydrator = $reflection->getMethod('registerEntityHydrator');
+        $registerEntityHydrator->invoke($provider, $container);
+
         $registerProxy = $reflection->getMethod('registerProxyFactory');
-        $registerProxy->setAccessible(true);
         $registerProxy->invoke($provider, $container);
 
         $registerEM = $reflection->getMethod('registerEntityManager');
-        $registerEM->setAccessible(true);
         $registerEM->invoke($provider, $container);
 
         $this->assertTrue($container->has(EntityManagerInterface::class));
@@ -747,11 +733,9 @@ class DependencyInjectionTest extends TestCase
 
         // These should not throw exceptions even though container has no special methods
         $registerMetadata = $reflection->getMethod('registerMetadataFactory');
-        $registerMetadata->setAccessible(true);
         $registerMetadata->invoke($provider, $container);
 
         $registerProxy = $reflection->getMethod('registerProxyFactory');
-        $registerProxy->setAccessible(true);
         $registerProxy->invoke($provider, $container);
 
         // Should complete without throwing exceptions
@@ -765,10 +749,12 @@ class DependencyInjectionTest extends TestCase
         $services = $provider->getProvidedServices();
 
         $this->assertIsArray($services);
-        $this->assertCount(7, $services);
+        $this->assertCount(9, $services);
         $this->assertContains(ConnectionInterface::class, $services);
         $this->assertContains(MetadataFactory::class, $services);
         $this->assertContains(ProxyFactoryInterface::class, $services);
+        $this->assertContains(\Fduarte42\Aurum\Hydration\EntityHydratorInterface::class, $services);
+        $this->assertContains(\Fduarte42\Aurum\Hydration\EntityHydrator::class, $services);
         $this->assertContains(EntityManagerInterface::class, $services);
         $this->assertContains(EntityManager::class, $services);
     }
@@ -817,7 +803,6 @@ class DependencyInjectionTest extends TestCase
         // Use reflection to test private registerConnection method
         $reflection = new \ReflectionClass($provider);
         $method = $reflection->getMethod('registerConnection');
-        $method->setAccessible(true);
 
         // This should complete without error even though no registration happens
         $method->invoke($provider, $container);
@@ -837,7 +822,6 @@ class DependencyInjectionTest extends TestCase
         // Use reflection to test private registerMetadataFactory method
         $reflection = new \ReflectionClass($provider);
         $method = $reflection->getMethod('registerMetadataFactory');
-        $method->setAccessible(true);
 
         // This should complete without error even though no registration happens
         $method->invoke($provider, $container);
@@ -857,7 +841,6 @@ class DependencyInjectionTest extends TestCase
         // Use reflection to test private registerProxyFactory method
         $reflection = new \ReflectionClass($provider);
         $method = $reflection->getMethod('registerProxyFactory');
-        $method->setAccessible(true);
 
         // This should complete without error even though no registration happens
         $method->invoke($provider, $container);
@@ -877,7 +860,6 @@ class DependencyInjectionTest extends TestCase
         // Use reflection to test private registerEntityManager method
         $reflection = new \ReflectionClass($provider);
         $method = $reflection->getMethod('registerEntityManager');
-        $method->setAccessible(true);
 
         // This should complete without error even though no registration happens
         $method->invoke($provider, $container);
@@ -902,23 +884,21 @@ class DependencyInjectionTest extends TestCase
         $reflection = new \ReflectionClass($provider);
 
         $registerConnection = $reflection->getMethod('registerConnection');
-        $registerConnection->setAccessible(true);
         $registerConnection->invoke($provider, $container);
 
         $registerTypeSystem = $reflection->getMethod('registerTypeSystem');
-        $registerTypeSystem->setAccessible(true);
         $registerTypeSystem->invoke($provider, $container);
 
         $registerMetadata = $reflection->getMethod('registerMetadataFactory');
-        $registerMetadata->setAccessible(true);
         $registerMetadata->invoke($provider, $container);
 
+        $registerEntityHydrator = $reflection->getMethod('registerEntityHydrator');
+        $registerEntityHydrator->invoke($provider, $container);
+
         $registerProxy = $reflection->getMethod('registerProxyFactory');
-        $registerProxy->setAccessible(true);
         $registerProxy->invoke($provider, $container);
 
         $registerEM = $reflection->getMethod('registerEntityManager');
-        $registerEM->setAccessible(true);
         $registerEM->invoke($provider, $container);
 
         // Verify all services were registered via DI\Container path
@@ -937,7 +917,7 @@ class DependencyInjectionTest extends TestCase
 
         // Test that getProvidedServices works with empty config
         $services = $provider->getProvidedServices();
-        $this->assertCount(7, $services);
+        $this->assertCount(9, $services);
     }
 
     public function testORMServiceProviderConstructorWithNullConfig(): void
@@ -949,6 +929,42 @@ class DependencyInjectionTest extends TestCase
         // Test that getProvidedServices works
         $services = $provider->getProvidedServices();
         $this->assertIsArray($services);
-        $this->assertCount(7, $services);
+        $this->assertCount(9, $services);
+    }
+
+    /**
+     * Helper method to register connection dependency for SimpleContainer
+     */
+    private function registerConnectionDependency(SimpleContainer $container): void
+    {
+        $mockConnection = $this->createMock(ConnectionInterface::class);
+        $container->set(ConnectionInterface::class, $mockConnection);
+    }
+
+    /**
+     * Helper method to register metadata factory dependency for SimpleContainer
+     */
+    private function registerMetadataFactoryDependency(SimpleContainer $container): void
+    {
+        $mockMetadataFactory = $this->createMock(MetadataFactory::class);
+        $container->set(MetadataFactory::class, $mockMetadataFactory);
+    }
+
+    /**
+     * Helper method to register connection dependency for DI Container
+     */
+    private function registerConnectionDependencyForDI(ContainerBuilder $container): void
+    {
+        $mockConnection = $this->createMock(ConnectionInterface::class);
+        $container->set(ConnectionInterface::class, $mockConnection);
+    }
+
+    /**
+     * Helper method to register metadata factory dependency for DI Container
+     */
+    private function registerMetadataFactoryDependencyForDI(ContainerBuilder $container): void
+    {
+        $mockMetadataFactory = $this->createMock(MetadataFactory::class);
+        $container->set(MetadataFactory::class, $mockMetadataFactory);
     }
 }

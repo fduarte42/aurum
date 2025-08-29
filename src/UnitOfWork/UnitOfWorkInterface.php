@@ -53,6 +53,15 @@ interface UnitOfWorkInterface
     public function clear(): void;
 
     /**
+     * Register an entity as managed
+     *
+     * @param object $entity
+     * @param mixed $id
+     * @param array<string, mixed> $data Original data
+     */
+    public function registerManaged(object $entity, mixed $id, array $data): void;
+
+    /**
      * Add an entity to the identity map without marking it as new
      */
     public function addToIdentityMap(string $identityKey, object $entity): void;

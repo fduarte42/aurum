@@ -22,14 +22,18 @@ interface EntityMetadataInterface
     public function getTableName(): string;
 
     /**
-     * Get the primary key field name
+     * Get the primary key field names
+     *
+     * @return array<string>
      */
-    public function getIdentifierFieldName(): string;
+    public function getIdentifierFieldNames(): array;
 
     /**
-     * Get the primary key column name
+     * Get the primary key column names
+     *
+     * @return array<string>
      */
-    public function getIdentifierColumnName(): string;
+    public function getIdentifierColumnNames(): array;
 
     /**
      * Get all field mappings
@@ -62,13 +66,31 @@ interface EntityMetadataInterface
 
     /**
      * Get the identifier value from an entity
+     * 
+     * @return mixed Single value for single-column PK, associative array for composite PK
      */
     public function getIdentifierValue(object $entity): mixed;
 
     /**
+     * Get the identifier values from an entity
+     *
+     * @return array<string, mixed> Field name => value
+     */
+    public function getIdentifierValues(object $entity): array;
+
+    /**
      * Set the identifier value on an entity
+     * 
+     * @param mixed $value Single value for single-column PK, associative array for composite PK
      */
     public function setIdentifierValue(object $entity, mixed $value): void;
+
+    /**
+     * Set the identifier values on an entity
+     *
+     * @param array<string, mixed> $values Field name => value
+     */
+    public function setIdentifierValues(object $entity, array $values): void;
 
     /**
      * Get a field value from an entity
@@ -121,4 +143,21 @@ interface EntityMetadataInterface
      * Get the discriminator value for this entity class
      */
     public function getDiscriminatorValue(): ?string;
+
+    /**
+     * Get lifecycle callbacks for a specific event
+     *
+     * @return array<string> List of method names
+     */
+    public function getLifecycleCallbacks(string $eventName): array;
+
+    /**
+     * Check if the entity has any lifecycle callbacks for a specific event
+     */
+    public function hasLifecycleCallbacks(string $eventName): bool;
+
+    /**
+     * Invoke lifecycle callbacks for a specific event
+     */
+    public function invokeLifecycleCallbacks(string $eventName, object $entity, array $args = []): void;
 }

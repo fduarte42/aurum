@@ -10,6 +10,7 @@ use Fduarte42\Aurum\EntityManagerInterface;
 use Fduarte42\Aurum\Exception\ORMException;
 use Fduarte42\Aurum\Tests\Fixtures\Todo;
 use Fduarte42\Aurum\Tests\Fixtures\User;
+use Fduarte42\Aurum\Tests\Fixtures\Category;
 use Brick\Math\BigDecimal;
 use PHPUnit\Framework\TestCase;
 
@@ -109,7 +110,6 @@ class EntityManagerTest extends TestCase
         $detachedUser = new User('merge@example.com', 'Updated Name');
         $reflection = new \ReflectionClass($detachedUser);
         $idProperty = $reflection->getProperty('id');
-        $idProperty->setAccessible(true);
         $idProperty->setValue($detachedUser, $userId);
         
         // Merge should update the managed entity
@@ -335,18 +335,19 @@ class EntityManagerTest extends TestCase
         if (!$this->isLazyGhostSupported()) {
             $this->expectException(\RuntimeException::class);
             $this->expectExceptionMessage('Lazy ghost functionality is not available. PHP 8.4+ is required for optimized proxy support.');
+            $this->entityManager->getReference(User::class, $nonexistentId);
+            return;
         }
 
+        // When lazy ghost functionality is available, the proxy should be created
+        // but accessing properties should fail when the entity doesn't exist
         $userRef = $this->entityManager->getReference(User::class, $nonexistentId);
+        $this->assertInstanceOf(User::class, $userRef);
 
-        // Only run assertions if lazy ghost functionality is available
-        if ($this->isLazyGhostSupported()) {
-            $this->assertInstanceOf(User::class, $userRef);
-
-            // The proxy should be created successfully, but accessing properties should fail
-            // For now, let's just verify the proxy was created
-            $this->assertTrue(true);
-        }
+        // Accessing properties should trigger initialization and fail
+        $this->expectException(\Fduarte42\Aurum\Exception\ORMException::class);
+        $this->expectExceptionMessage('Entity of type "Fduarte42\Aurum\Tests\Fixtures\User" with identifier "nonexistent-id" not found.');
+        $userRef->getEmail(); // This should trigger the exception
     }
 
     public function testContains(): void
@@ -378,6 +379,23 @@ class EntityManagerTest extends TestCase
         $this->assertTrue($this->entityManager->isOpen());
     }
 
+    public function testCircularDependency(): void
+    {
+        $cat1 = new Category('Category 1');
+        $cat2 = new Category('Category 2', $cat1);
+        $cat1->parent = $cat2; // Circular dependency
+
+        $this->entityManager->persist($cat1);
+        $this->entityManager->persist($cat2);
+        
+        $this->entityManager->flush();
+
+        $this->assertNotNull($cat1->getId());
+        $this->assertNotNull($cat2->getId());
+        $this->assertEquals($cat2->getId(), $cat1->parent->getId());
+        $this->assertEquals($cat1->getId(), $cat2->parent->getId());
+    }
+
     private function createSchema(): void
     {
         $connection = $this->entityManager->getConnection();
@@ -402,6 +420,15 @@ class EntityManagerTest extends TestCase
                 completed_at TEXT,
                 user_id TEXT,
                 FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        ');
+
+        $connection->execute('
+            CREATE TABLE categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                parent_id INTEGER,
+                FOREIGN KEY (parent_id) REFERENCES categories(id)
             )
         ');
     }

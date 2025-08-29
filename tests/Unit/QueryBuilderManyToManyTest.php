@@ -85,7 +85,6 @@ class QueryBuilderManyToManyTest extends TestCase
         // Check that joins were added (should have 2 joins: junction table + target table)
         $reflection = new \ReflectionClass($qb);
         $joinsProperty = $reflection->getProperty('joins');
-        $joinsProperty->setAccessible(true);
         $joins = $joinsProperty->getValue($qb);
 
         // Should have 2 joins: one to junction table, one to target table
@@ -112,7 +111,6 @@ class QueryBuilderManyToManyTest extends TestCase
         // This should work because resolveTableName handles associations
         $reflection = new \ReflectionClass($qb);
         $method = $reflection->getMethod('resolveTableName');
-        $method->setAccessible(true);
 
         $tableName = $method->invoke($qb, 'roles');
         $this->assertEquals('qb_roles', $tableName);

@@ -486,7 +486,7 @@ class MetadataFactoryTest extends TestCase
         $metadata->addFieldMapping($nameMapping);
 
         $this->expectException(\Fduarte42\Aurum\Exception\ORMException::class);
-        $this->expectExceptionMessage('No identifier field found');
+        $this->expectExceptionMessage('No identifier fields found');
 
         $metadata->getIdentifierFieldName();
     }
