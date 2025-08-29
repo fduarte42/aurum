@@ -222,7 +222,7 @@ class QueryResultRefactoringTest extends TestCase
         $qb = new \Fduarte42\Aurum\Query\QueryBuilder($this->entityManager->getConnection());
 
         $this->expectException(\Fduarte42\Aurum\Exception\ORMException::class);
-        $this->expectExceptionMessage('Cannot hydrate entities: root entity class and metadata factory must be set');
+        $this->expectExceptionMessage('Cannot hydrate entities: root entity class, metadata factory, and entity hydrator must be set');
 
         $qb->select('*')->from('todos', 't')->getResult();
     }

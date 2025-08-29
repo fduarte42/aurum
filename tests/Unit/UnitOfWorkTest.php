@@ -6,6 +6,7 @@ namespace Fduarte42\Aurum\Tests\Unit;
 
 use Fduarte42\Aurum\Connection\ConnectionFactory;
 use Fduarte42\Aurum\Exception\ORMException;
+use Fduarte42\Aurum\Hydration\EntityHydrator;
 use Fduarte42\Aurum\Metadata\MetadataFactory;
 use Fduarte42\Aurum\Proxy\LazyGhostProxyFactory;
 use Fduarte42\Aurum\Tests\Fixtures\Todo;
@@ -32,11 +33,13 @@ class UnitOfWorkTest extends TestCase
         $this->metadataFactory = new MetadataFactory($typeRegistry, $typeInference);
 
         $proxyFactory = new LazyGhostProxyFactory();
-        
+        $entityHydrator = new EntityHydrator($this->metadataFactory);
+
         $this->unitOfWork = new UnitOfWork(
             $this->connection,
             $this->metadataFactory,
             $proxyFactory,
+            $entityHydrator,
             'test_uow'
         );
         

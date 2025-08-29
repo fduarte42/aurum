@@ -6,6 +6,7 @@ namespace Fduarte42\Aurum;
 
 use Fduarte42\Aurum\Connection\ConnectionInterface;
 use Fduarte42\Aurum\Exception\ORMException;
+use Fduarte42\Aurum\Hydration\EntityHydratorInterface;
 use Fduarte42\Aurum\Metadata\MetadataFactory;
 use Fduarte42\Aurum\Migration\MigrationManager;
 use Fduarte42\Aurum\Migration\MigrationManagerInterface;
@@ -81,18 +82,31 @@ class EntityManager implements EntityManagerInterface
         return $this->currentUnitOfWork;
     }
 
+    public function getCurrentUnitOfWork(): UnitOfWorkInterface
+    {
+        return $this->currentUnitOfWork;
+    }
+
     public function createUnitOfWork(): UnitOfWorkInterface
     {
         $unitOfWorkId = (string) ++$this->unitOfWorkCounter;
+
+        // Get EntityHydrator from container
+        $entityHydrator = $this->container?->get(EntityHydratorInterface::class);
+        if ($entityHydrator === null) {
+            throw new \RuntimeException('EntityHydrator not found in container. Ensure it is properly registered.');
+        }
+
         $unitOfWork = new UnitOfWork(
             $this->connection,
             $this->metadataFactory,
             $this->proxyFactory,
+            $entityHydrator,
             $unitOfWorkId
         );
-        
+
         $this->unitOfWorks[$unitOfWorkId] = $unitOfWork;
-        
+
         return $unitOfWork;
     }
 
@@ -334,11 +348,17 @@ class EntityManager implements EntityManagerInterface
         // Check if entity is already managed
         $managedEntity = $this->currentUnitOfWork->find($className, $id);
         if ($managedEntity !== null) {
-            // Copy state from detached entity to managed entity
-            foreach ($metadata->getFieldMappings() as $fieldMapping) {
-                if (!$fieldMapping->isIdentifier()) {
-                    $value = $metadata->getFieldValue($entity, $fieldMapping->getFieldName());
-                    $metadata->setFieldValue($managedEntity, $fieldMapping->getFieldName(), $value);
+            // Use the centralized EntityHydrator to merge entities
+            $entityHydrator = $this->container?->get(EntityHydratorInterface::class);
+            if ($entityHydrator !== null) {
+                $entityHydrator->mergeEntities($entity, $managedEntity, true);
+            } else {
+                // Fallback to direct field copying if EntityHydrator is not available
+                foreach ($metadata->getFieldMappings() as $fieldMapping) {
+                    if (!$fieldMapping->isIdentifier()) {
+                        $value = $metadata->getFieldValue($entity, $fieldMapping->getFieldName());
+                        $metadata->setFieldValue($managedEntity, $fieldMapping->getFieldName(), $value);
+                    }
                 }
             }
             return $managedEntity;

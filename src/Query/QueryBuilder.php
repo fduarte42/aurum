@@ -6,6 +6,7 @@ namespace Fduarte42\Aurum\Query;
 
 use Fduarte42\Aurum\Connection\ConnectionInterface;
 use Fduarte42\Aurum\Exception\ORMException;
+use Fduarte42\Aurum\Hydration\EntityHydratorInterface;
 use Fduarte42\Aurum\Metadata\EntityMetadataInterface;
 use Fduarte42\Aurum\Metadata\MetadataFactory;
 
@@ -27,12 +28,15 @@ class QueryBuilder implements QueryBuilderInterface
     private array $parameters = [];
     private ?string $rootEntityClass = null;
     private ?MetadataFactory $metadataFactory = null;
+    private ?EntityHydratorInterface $entityHydrator = null;
 
     public function __construct(
         private readonly ConnectionInterface $connection,
-        ?MetadataFactory $metadataFactory = null
+        ?MetadataFactory $metadataFactory = null,
+        ?EntityHydratorInterface $entityHydrator = null
     ) {
         $this->metadataFactory = $metadataFactory;
+        $this->entityHydrator = $entityHydrator;
     }
 
     public function select(string|array ...$select): self
@@ -313,12 +317,12 @@ class QueryBuilder implements QueryBuilderInterface
 
     public function getResult(): \Iterator
     {
-        if (!$this->rootEntityClass || !$this->metadataFactory) {
-            throw new ORMException("Cannot hydrate entities: root entity class and metadata factory must be set. Use getArrayResult() for raw data or set entity class with from().");
+        if (!$this->rootEntityClass || !$this->metadataFactory || !$this->entityHydrator) {
+            throw new ORMException("Cannot hydrate entities: root entity class, metadata factory, and entity hydrator must be set. Use getArrayResult() for raw data or set entity class with from().");
         }
 
         $statement = $this->getArrayResult();
-        return new EntityResultIterator($statement, $this->metadataFactory, $this->rootEntityClass);
+        return new EntityResultIterator($statement, $this->metadataFactory, $this->entityHydrator, $this->rootEntityClass);
     }
 
     public function getOneOrNullResult(): ?array

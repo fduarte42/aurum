@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Fduarte42\Aurum\Query;
 
+use Fduarte42\Aurum\Hydration\EntityHydratorInterface;
 use Fduarte42\Aurum\Metadata\MetadataFactory;
 
 /**
@@ -19,6 +20,7 @@ class EntityResultIterator implements \Iterator, \Countable
 {
     private \Iterator $sourceIterator;
     private MetadataFactory $metadataFactory;
+    private EntityHydratorInterface $entityHydrator;
     private string $rootEntityClass;
     private ?object $current = null;
     private int $position = 0;
@@ -27,10 +29,12 @@ class EntityResultIterator implements \Iterator, \Countable
     public function __construct(
         \Iterator $sourceIterator,
         MetadataFactory $metadataFactory,
+        EntityHydratorInterface $entityHydrator,
         string $rootEntityClass
     ) {
         $this->sourceIterator = $sourceIterator;
         $this->metadataFactory = $metadataFactory;
+        $this->entityHydrator = $entityHydrator;
         $this->rootEntityClass = $rootEntityClass;
     }
 
@@ -118,47 +122,7 @@ class EntityResultIterator implements \Iterator, \Countable
      */
     private function hydrateEntityDetached(array $data): object
     {
-        // Determine the correct entity class for inheritance hierarchies
-        $entityClass = $this->rootEntityClass;
-        $metadata = $this->metadataFactory->getMetadataFor($entityClass);
-
-        if ($metadata->hasInheritance()) {
-            $inheritanceMapping = $metadata->getInheritanceMapping();
-            $discriminatorColumn = $inheritanceMapping->getDiscriminatorColumn();
-
-            // Check if discriminator value is present in the data
-            if (isset($data[$discriminatorColumn]) || isset($data['__discriminator'])) {
-                $discriminatorValue = $data[$discriminatorColumn] ?? $data['__discriminator'];
-                $actualEntityClass = $inheritanceMapping->getClassNameForDiscriminatorValue($discriminatorValue);
-
-                if ($actualEntityClass !== $entityClass && class_exists($actualEntityClass)) {
-                    $entityClass = $actualEntityClass;
-                    $metadata = $this->metadataFactory->getMetadataFor($entityClass);
-                }
-            }
-        }
-
-        $entity = $metadata->newInstance();
-        
-        foreach ($metadata->getFieldMappings() as $fieldMapping) {
-            $fieldName = $fieldMapping->getFieldName();
-            $columnName = $fieldMapping->getColumnName();
-
-            // Skip discriminator field as it's virtual
-            if ($fieldName === '__discriminator') {
-                continue;
-            }
-
-            if (isset($data[$fieldName])) {
-                // Data is already mapped by field name (from query builder)
-                $metadata->setFieldValue($entity, $fieldName, $data[$fieldName]);
-            } elseif (isset($data[$columnName])) {
-                // Data is mapped by column name (from raw SQL)
-                $metadata->setFieldValue($entity, $fieldName, $data[$columnName]);
-            }
-        }
-
-        // Return detached entity (not added to any UnitOfWork)
-        return $entity;
+        // Use the centralized EntityHydrator to hydrate detached entities
+        return $this->entityHydrator->hydrateDetached($data, $this->rootEntityClass);
     }
 }

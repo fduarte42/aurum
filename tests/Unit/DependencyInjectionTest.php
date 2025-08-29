@@ -314,6 +314,10 @@ class DependencyInjectionTest extends TestCase
         $provider = new ORMServiceProvider($config);
         $container = new SimpleContainer();
 
+        // Register required dependencies first
+        $this->registerConnectionDependency($container);
+        $this->registerMetadataFactoryDependency($container);
+
         // Use reflection to test private registerProxyFactory method
         $reflection = new \ReflectionClass($provider);
         $method = $reflection->getMethod('registerProxyFactory');
@@ -350,6 +354,10 @@ class DependencyInjectionTest extends TestCase
         $registerMetadata = $reflection->getMethod('registerMetadataFactory');
         $registerMetadata->setAccessible(true);
         $registerMetadata->invoke($provider, $container);
+
+        $registerEntityHydrator = $reflection->getMethod('registerEntityHydrator');
+        $registerEntityHydrator->setAccessible(true);
+        $registerEntityHydrator->invoke($provider, $container);
 
         $registerProxy = $reflection->getMethod('registerProxyFactory');
         $registerProxy->setAccessible(true);
@@ -504,6 +512,10 @@ class DependencyInjectionTest extends TestCase
         $registerMetadata = $reflection->getMethod('registerMetadataFactory');
         $registerMetadata->setAccessible(true);
         $registerMetadata->invoke($provider, $container);
+
+        $registerEntityHydrator = $reflection->getMethod('registerEntityHydrator');
+        $registerEntityHydrator->setAccessible(true);
+        $registerEntityHydrator->invoke($provider, $container);
 
         $registerProxy = $reflection->getMethod('registerProxyFactory');
         $registerProxy->setAccessible(true);
@@ -677,6 +689,10 @@ class DependencyInjectionTest extends TestCase
         $provider = new ORMServiceProvider();
         $container = new ContainerBuilder(); // This extends DI\Container
 
+        // Register required dependencies first
+        $this->registerConnectionDependencyForDI($container);
+        $this->registerMetadataFactoryDependencyForDI($container);
+
         // Use reflection to test private registerProxyFactory method
         $reflection = new \ReflectionClass($provider);
         $method = $reflection->getMethod('registerProxyFactory');
@@ -712,6 +728,10 @@ class DependencyInjectionTest extends TestCase
         $registerMetadata = $reflection->getMethod('registerMetadataFactory');
         $registerMetadata->setAccessible(true);
         $registerMetadata->invoke($provider, $container);
+
+        $registerEntityHydrator = $reflection->getMethod('registerEntityHydrator');
+        $registerEntityHydrator->setAccessible(true);
+        $registerEntityHydrator->invoke($provider, $container);
 
         $registerProxy = $reflection->getMethod('registerProxyFactory');
         $registerProxy->setAccessible(true);
@@ -765,10 +785,12 @@ class DependencyInjectionTest extends TestCase
         $services = $provider->getProvidedServices();
 
         $this->assertIsArray($services);
-        $this->assertCount(7, $services);
+        $this->assertCount(9, $services);
         $this->assertContains(ConnectionInterface::class, $services);
         $this->assertContains(MetadataFactory::class, $services);
         $this->assertContains(ProxyFactoryInterface::class, $services);
+        $this->assertContains(\Fduarte42\Aurum\Hydration\EntityHydratorInterface::class, $services);
+        $this->assertContains(\Fduarte42\Aurum\Hydration\EntityHydrator::class, $services);
         $this->assertContains(EntityManagerInterface::class, $services);
         $this->assertContains(EntityManager::class, $services);
     }
@@ -913,6 +935,10 @@ class DependencyInjectionTest extends TestCase
         $registerMetadata->setAccessible(true);
         $registerMetadata->invoke($provider, $container);
 
+        $registerEntityHydrator = $reflection->getMethod('registerEntityHydrator');
+        $registerEntityHydrator->setAccessible(true);
+        $registerEntityHydrator->invoke($provider, $container);
+
         $registerProxy = $reflection->getMethod('registerProxyFactory');
         $registerProxy->setAccessible(true);
         $registerProxy->invoke($provider, $container);
@@ -937,7 +963,7 @@ class DependencyInjectionTest extends TestCase
 
         // Test that getProvidedServices works with empty config
         $services = $provider->getProvidedServices();
-        $this->assertCount(7, $services);
+        $this->assertCount(9, $services);
     }
 
     public function testORMServiceProviderConstructorWithNullConfig(): void
@@ -949,6 +975,42 @@ class DependencyInjectionTest extends TestCase
         // Test that getProvidedServices works
         $services = $provider->getProvidedServices();
         $this->assertIsArray($services);
-        $this->assertCount(7, $services);
+        $this->assertCount(9, $services);
+    }
+
+    /**
+     * Helper method to register connection dependency for SimpleContainer
+     */
+    private function registerConnectionDependency(SimpleContainer $container): void
+    {
+        $mockConnection = $this->createMock(ConnectionInterface::class);
+        $container->set(ConnectionInterface::class, $mockConnection);
+    }
+
+    /**
+     * Helper method to register metadata factory dependency for SimpleContainer
+     */
+    private function registerMetadataFactoryDependency(SimpleContainer $container): void
+    {
+        $mockMetadataFactory = $this->createMock(MetadataFactory::class);
+        $container->set(MetadataFactory::class, $mockMetadataFactory);
+    }
+
+    /**
+     * Helper method to register connection dependency for DI Container
+     */
+    private function registerConnectionDependencyForDI(ContainerBuilder $container): void
+    {
+        $mockConnection = $this->createMock(ConnectionInterface::class);
+        $container->set(ConnectionInterface::class, $mockConnection);
+    }
+
+    /**
+     * Helper method to register metadata factory dependency for DI Container
+     */
+    private function registerMetadataFactoryDependencyForDI(ContainerBuilder $container): void
+    {
+        $mockMetadataFactory = $this->createMock(MetadataFactory::class);
+        $container->set(MetadataFactory::class, $mockMetadataFactory);
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Fduarte42\Aurum\Proxy;
 
 use Fduarte42\Aurum\Exception\ORMException;
+use Fduarte42\Aurum\Hydration\EntityHydratorInterface;
 use Fduarte42\Aurum\Metadata\EntityMetadataInterface;
 use Fduarte42\Aurum\Connection\ConnectionInterface;
 use Fduarte42\Aurum\Metadata\MetadataFactory;
@@ -45,8 +46,8 @@ class LazyGhostProxyFactory implements ProxyFactoryInterface
             // Store the identifier
             $this->proxyIdentifiers[$proxy] = $identifier;
 
-            // Set the ID property immediately without triggering lazy loading
-            $this->setIdentifierOnProxy($proxy, $className, $identifier);
+            // Note: We don't set the ID property immediately to avoid triggering lazy loading
+            // The ID will be available through getProxyIdentifier() method
 
             return $proxy;
         } else {

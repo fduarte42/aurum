@@ -228,6 +228,7 @@ class RepositoryFactory
             'setEntityManager' => $this->entityManager,
             'setMetadata' => $metadata,
             'setContainer' => $this->container,
+            'setEntityHydrator' => $this->container?->get(\Fduarte42\Aurum\Hydration\EntityHydratorInterface::class),
         ];
 
         foreach ($setters as $methodName => $value) {

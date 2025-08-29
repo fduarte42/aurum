@@ -8,6 +8,8 @@ use Fduarte42\Aurum\Connection\ConnectionFactory;
 use Fduarte42\Aurum\Connection\ConnectionInterface;
 use Fduarte42\Aurum\EntityManager;
 use Fduarte42\Aurum\EntityManagerInterface;
+use Fduarte42\Aurum\Hydration\EntityHydrator;
+use Fduarte42\Aurum\Hydration\EntityHydratorInterface;
 use Fduarte42\Aurum\Metadata\MetadataFactory;
 use Fduarte42\Aurum\Proxy\LazyGhostProxyFactory;
 use Fduarte42\Aurum\Proxy\ProxyFactoryInterface;
@@ -36,10 +38,13 @@ class ORMServiceProvider implements ServiceProviderInterface
         // Register metadata factory
         $this->registerMetadataFactory($container);
 
-        // Register proxy factory
+        // Register entity hydrator first (required by ProxyFactory and EntityManager)
+        $this->registerEntityHydrator($container);
+
+        // Register proxy factory (depends on EntityHydrator)
         $this->registerProxyFactory($container);
 
-        // Register entity manager
+        // Register entity manager (depends on EntityHydrator)
         $this->registerEntityManager($container);
     }
 
@@ -51,6 +56,8 @@ class ORMServiceProvider implements ServiceProviderInterface
             TypeInference::class,
             MetadataFactory::class,
             ProxyFactoryInterface::class,
+            EntityHydratorInterface::class,
+            EntityHydrator::class,
             EntityManagerInterface::class,
             EntityManager::class,
         ];
@@ -122,11 +129,48 @@ class ORMServiceProvider implements ServiceProviderInterface
     private function registerProxyFactory(ContainerInterface $container): void
     {
         if ($container instanceof \DI\Container) {
-            $container->set(ProxyFactoryInterface::class, \DI\create(LazyGhostProxyFactory::class));
+            $container->set(ProxyFactoryInterface::class, function (ContainerInterface $c) {
+                return new LazyGhostProxyFactory(
+                    $c->get(ConnectionInterface::class),
+                    $c->get(MetadataFactory::class)
+                );
+            });
         } elseif (method_exists($container, 'bind')) {
-            $container->bind(ProxyFactoryInterface::class, LazyGhostProxyFactory::class);
+            $container->bind(ProxyFactoryInterface::class, function ($c) {
+                return new LazyGhostProxyFactory(
+                    $c->make(ConnectionInterface::class),
+                    $c->make(MetadataFactory::class)
+                );
+            });
         } elseif (method_exists($container, 'set')) {
-            $container->set(ProxyFactoryInterface::class, new LazyGhostProxyFactory());
+            $container->set(ProxyFactoryInterface::class, new LazyGhostProxyFactory(
+                $container->get(ConnectionInterface::class),
+                $container->get(MetadataFactory::class)
+            ));
+        }
+    }
+
+    private function registerEntityHydrator(ContainerInterface $container): void
+    {
+        if ($container instanceof \DI\Container) {
+            $container->set(EntityHydratorInterface::class, function (ContainerInterface $c) {
+                return new EntityHydrator(
+                    $c->get(MetadataFactory::class)
+                );
+            });
+            $container->set(EntityHydrator::class, \DI\get(EntityHydratorInterface::class));
+        } elseif (method_exists($container, 'bind')) {
+            $container->bind(EntityHydratorInterface::class, function ($c) {
+                return new EntityHydrator(
+                    $c->make(MetadataFactory::class)
+                );
+            });
+            $container->bind(EntityHydrator::class, EntityHydratorInterface::class);
+        } elseif (method_exists($container, 'set')) {
+            $container->set(EntityHydratorInterface::class, new EntityHydrator(
+                $container->get(MetadataFactory::class)
+            ));
+            $container->set(EntityHydrator::class, $container->get(EntityHydratorInterface::class));
         }
     }
 

@@ -305,7 +305,7 @@ class QueryBuilderTest extends TestCase
         $connection->execute('INSERT INTO test_table VALUES (1, "test1")');
 
         $this->expectException(\Fduarte42\Aurum\Exception\ORMException::class);
-        $this->expectExceptionMessage('Cannot hydrate entities: root entity class and metadata factory must be set');
+        $this->expectExceptionMessage('Cannot hydrate entities: root entity class, metadata factory, and entity hydrator must be set');
 
         $this->queryBuilder
             ->select('*')

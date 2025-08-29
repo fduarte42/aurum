@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Fduarte42\Aurum\Tests\Unit\Repository;
 
 use Fduarte42\Aurum\EntityManagerInterface;
+use Fduarte42\Aurum\Hydration\EntityHydrator;
+use Fduarte42\Aurum\Hydration\EntityHydratorInterface;
 use Fduarte42\Aurum\Metadata\EntityMetadataInterface;
+use Fduarte42\Aurum\Metadata\MetadataFactory;
 use Fduarte42\Aurum\Repository\Repository;
 use Fduarte42\Aurum\Repository\RepositoryFactory;
 use Fduarte42\Aurum\Repository\RepositoryInterface;
@@ -19,12 +22,14 @@ class RepositoryDependencyInjectionTest extends TestCase
     private EntityManagerInterface|MockObject $entityManager;
     private EntityMetadataInterface|MockObject $metadata;
     private ContainerInterface|MockObject $container;
+    private EntityHydratorInterface|MockObject $entityHydrator;
 
     protected function setUp(): void
     {
         $this->entityManager = $this->createMock(EntityManagerInterface::class);
         $this->metadata = $this->createMock(EntityMetadataInterface::class);
         $this->container = $this->createMock(ContainerInterface::class);
+        $this->entityHydrator = $this->createMock(EntityHydratorInterface::class);
     }
 
     public function testRepositoryWithManualDependencyInjection(): void
@@ -34,6 +39,7 @@ class RepositoryDependencyInjectionTest extends TestCase
         $repository->setClassName(Todo::class);
         $repository->setEntityManager($this->entityManager);
         $repository->setMetadata($this->metadata);
+        $repository->setEntityHydrator($this->entityHydrator);
 
         $this->assertEquals(Todo::class, $repository->getClassName());
         $this->assertInstanceOf(RepositoryInterface::class, $repository);
@@ -43,11 +49,12 @@ class RepositoryDependencyInjectionTest extends TestCase
     {
         // Test default constructor
         $repository = new Repository();
-        
+
         // Dependencies should be injected via setters
         $repository->setClassName(Todo::class);
         $repository->setEntityManager($this->entityManager);
         $repository->setMetadata($this->metadata);
+        $repository->setEntityHydrator($this->entityHydrator);
         
         $this->assertEquals(Todo::class, $repository->getClassName());
     }
@@ -74,6 +81,12 @@ class RepositoryDependencyInjectionTest extends TestCase
             ->method('getMetadataFactory')
             ->willReturn($metadataFactory);
 
+        // Mock container to provide EntityHydrator
+        $this->container->expects($this->once())
+            ->method('get')
+            ->with(EntityHydratorInterface::class)
+            ->willReturn($this->entityHydrator);
+
         $factory = new RepositoryFactory($this->entityManager, $this->container);
         $repository = $factory->createRepository(Todo::class);
 
@@ -92,6 +105,12 @@ class RepositoryDependencyInjectionTest extends TestCase
         $this->entityManager->expects($this->any())
             ->method('getMetadataFactory')
             ->willReturn($metadataFactory);
+
+        // Mock container to provide EntityHydrator
+        $this->container->expects($this->once())
+            ->method('get')
+            ->with(EntityHydratorInterface::class)
+            ->willReturn($this->entityHydrator);
 
         $factory = new RepositoryFactory($this->entityManager, $this->container);
         $repository = $factory->createRepository(Todo::class, CustomTestRepository::class);
@@ -112,16 +131,21 @@ class RepositoryDependencyInjectionTest extends TestCase
             ->method('getMetadataFactory')
             ->willReturn($metadataFactory);
 
-        // Mock container to provide custom dependency
+        // Mock container to provide custom dependency and EntityHydrator
         $customService = new \stdClass();
-        $this->container->expects($this->once())
+        $this->container->expects($this->exactly(2))
             ->method('has')
-            ->with(\stdClass::class)
-            ->willReturn(true);
-        $this->container->expects($this->once())
+            ->willReturnMap([
+                [EntityHydratorInterface::class, true],
+                [\stdClass::class, true]
+            ]);
+        $this->container->expects($this->exactly(3))
             ->method('get')
-            ->with(\stdClass::class)
-            ->willReturn($customService);
+            ->willReturnMap([
+                [EntityHydratorInterface::class, $this->entityHydrator],
+                [EntityHydratorInterface::class, $this->entityHydrator],
+                [\stdClass::class, $customService]
+            ]);
 
         $factory = new RepositoryFactory($this->entityManager, $this->container);
         $repository = $factory->createRepository(Todo::class, CustomRepositoryWithDependency::class);
@@ -142,6 +166,12 @@ class RepositoryDependencyInjectionTest extends TestCase
         $this->entityManager->expects($this->any())
             ->method('getMetadataFactory')
             ->willReturn($metadataFactory);
+
+        // Mock container to provide EntityHydrator
+        $this->container->expects($this->once())
+            ->method('get')
+            ->with(EntityHydratorInterface::class)
+            ->willReturn($this->entityHydrator);
 
         $factory = new RepositoryFactory($this->entityManager, $this->container);
         $repository = $factory->createRepository(Todo::class, RepositoryWithoutConstructor::class);

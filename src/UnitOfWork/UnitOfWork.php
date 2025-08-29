@@ -6,6 +6,7 @@ namespace Fduarte42\Aurum\UnitOfWork;
 
 use Fduarte42\Aurum\Connection\ConnectionInterface;
 use Fduarte42\Aurum\Exception\ORMException;
+use Fduarte42\Aurum\Hydration\EntityHydratorInterface;
 use Fduarte42\Aurum\Metadata\MetadataFactory;
 use Fduarte42\Aurum\Proxy\ProxyFactoryInterface;
 use Ramsey\Uuid\Uuid;
@@ -43,6 +44,7 @@ class UnitOfWork implements UnitOfWorkInterface
         private readonly ConnectionInterface $connection,
         private readonly MetadataFactory $metadataFactory,
         private readonly ProxyFactoryInterface $proxyFactory,
+        private readonly EntityHydratorInterface $entityHydrator,
         private readonly string $unitOfWorkId
     ) {
         $this->savepointName = 'uow_' . $this->unitOfWorkId;
@@ -326,28 +328,17 @@ class UnitOfWork implements UnitOfWorkInterface
 
     private function extractEntityData(object $entity): array
     {
-        $className = $this->proxyFactory->getRealClass($entity);
-        $metadata = $this->metadataFactory->getMetadataFor($className);
-        
-        $data = [];
-        foreach ($metadata->getFieldMappings() as $fieldMapping) {
-            $data[$fieldMapping->getFieldName()] = $metadata->getFieldValue($entity, $fieldMapping->getFieldName());
-        }
-        
-        return $data;
+        // Use the centralized EntityHydrator to extract entity data
+        return $this->entityHydrator->extractEntityData($entity);
     }
 
     private function populateEntity(object $entity, array $data): void
     {
         $className = $this->proxyFactory->getRealClass($entity);
         $metadata = $this->metadataFactory->getMetadataFor($className);
-        
-        foreach ($metadata->getFieldMappings() as $fieldMapping) {
-            $columnName = $fieldMapping->getColumnName();
-            if (isset($data[$columnName])) {
-                $metadata->setFieldValue($entity, $fieldMapping->getFieldName(), $data[$columnName]);
-            }
-        }
+
+        // Use the centralized EntityHydrator to populate the entity
+        $this->entityHydrator->populateEntity($entity, $data, $metadata);
     }
 
     private function computeChangeSets(): void

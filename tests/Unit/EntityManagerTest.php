@@ -335,18 +335,19 @@ class EntityManagerTest extends TestCase
         if (!$this->isLazyGhostSupported()) {
             $this->expectException(\RuntimeException::class);
             $this->expectExceptionMessage('Lazy ghost functionality is not available. PHP 8.4+ is required for optimized proxy support.');
+            $this->entityManager->getReference(User::class, $nonexistentId);
+            return;
         }
 
+        // When lazy ghost functionality is available, the proxy should be created
+        // but accessing properties should fail when the entity doesn't exist
         $userRef = $this->entityManager->getReference(User::class, $nonexistentId);
+        $this->assertInstanceOf(User::class, $userRef);
 
-        // Only run assertions if lazy ghost functionality is available
-        if ($this->isLazyGhostSupported()) {
-            $this->assertInstanceOf(User::class, $userRef);
-
-            // The proxy should be created successfully, but accessing properties should fail
-            // For now, let's just verify the proxy was created
-            $this->assertTrue(true);
-        }
+        // Accessing properties should trigger initialization and fail
+        $this->expectException(\Fduarte42\Aurum\Exception\ORMException::class);
+        $this->expectExceptionMessage('Entity of type "Fduarte42\Aurum\Tests\Fixtures\User" with identifier "nonexistent-id" not found.');
+        $userRef->getEmail(); // This should trigger the exception
     }
 
     public function testContains(): void

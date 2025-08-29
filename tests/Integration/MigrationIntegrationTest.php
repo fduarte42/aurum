@@ -85,11 +85,18 @@ class MigrationIntegrationTest extends TestCase
 
     public function testMigrationWithEntityManager(): void
     {
+        // Create a container with EntityHydrator
+        $container = new \Fduarte42\Aurum\DependencyInjection\SimpleContainer();
+        $metadataFactory = new \Fduarte42\Aurum\Metadata\MetadataFactory();
+        $entityHydrator = new \Fduarte42\Aurum\Hydration\EntityHydrator($metadataFactory);
+        $container->set(\Fduarte42\Aurum\Hydration\EntityHydratorInterface::class, $entityHydrator);
+
         // Create EntityManager with migration support
         $entityManager = new EntityManager(
             $this->connection,
-            new \Fduarte42\Aurum\Metadata\MetadataFactory(),
-            new \Fduarte42\Aurum\Proxy\LazyGhostProxyFactory()
+            $metadataFactory,
+            new \Fduarte42\Aurum\Proxy\LazyGhostProxyFactory(),
+            $container
         );
 
         // Use the same migration manager that was set up in setUp
