@@ -11,6 +11,7 @@ declare(strict_types=1);
  * Usage:
  *   php bin/aurum-cli.php schema generate --entities="User,Post" --format=schema-builder
  *   php bin/aurum-cli.php migration diff --entities="User,Post" --name="UpdateSchema"
+ *   php bin/aurum-cli.php migration migrate
  *   php bin/aurum-cli.php migration diff --namespace="App\Entity"
  *   php bin/aurum-cli.php schema generate  # Auto-discover all entities
  */
@@ -41,6 +42,7 @@ if (!$autoloadFound) {
 use Fduarte42\Aurum\Cli\Application;
 use Fduarte42\Aurum\Cli\Command\SchemaCommand;
 use Fduarte42\Aurum\Cli\Command\MigrationDiffCommand;
+use Fduarte42\Aurum\Cli\Command\MigrationMigrateCommand;
 
 // Load configuration from file if it exists
 $configFile = getcwd() . '/aurum.config.php';
@@ -56,6 +58,7 @@ $app = new Application($config);
 // Register commands
 $app->addCommand(new SchemaCommand($config));
 $app->addCommand(new MigrationDiffCommand($config));
+$app->addCommand(new MigrationMigrateCommand($config));
 
 // Run the application
 exit($app->run($argv));
