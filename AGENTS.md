@@ -24,6 +24,7 @@ Aurum is a modern PHP 8.4+ ORM inspired by Doctrine, featuring an advanced type 
 - **Style fix**: `composer cs-fix` (runs PHPCBF)
 - **Schema generation**: `php bin/aurum-cli.php schema generate`
 - **Migration diff**: `php bin/aurum-cli.php migration diff --name="MigrationName"`
+- **Migration execute**: `php bin/aurum-cli.php migration migrate`
 
 ## Coding Style & Naming Conventions
 

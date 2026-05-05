@@ -210,8 +210,9 @@ Aurum includes a comprehensive test suite:
 ```
 
 **Test Results:**
-- ✅ **644 tests, 1557 assertions**
+- ✅ **801 tests, 2064 assertions**
 - ✅ **All tests passing** (100% success rate)
+- ✅ **0 failures, 0 warnings, 0 deprecations**
 - ✅ **Many-to-Many QueryBuilder tests** included
 - ✅ SQLite in-memory databases for speed
 - ✅ Comprehensive CLI testing

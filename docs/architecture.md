@@ -15,20 +15,29 @@ interface EntityManagerInterface
     public function remove(object $entity): void;
     public function flush(): void;
     public function find(string $className, mixed $id): ?object;
-    public function getRepository(string $className): Repository;
+    public function getRepository(string $className): RepositoryInterface;
     public function createQueryBuilder(string $alias): QueryBuilder;
+    public function transactional(callable $func): mixed;
+    public function manage(object $entity): object;
+    public function merge(object $entity): object;
+    public function getReference(string $className, mixed $id): object;
+    public function createUnitOfWork(): UnitOfWorkInterface;
+    public function setUnitOfWork(UnitOfWorkInterface $unitOfWork): void;
+    public function getUnitOfWork(): UnitOfWorkInterface;
 }
 ```
 
 **Key Responsibilities:**
-- Entity lifecycle management
-- Transaction coordination
-- Repository factory
-- Query builder creation
+- Entity lifecycle management (persist, remove, flush, manage, merge)
+- Transaction coordination (beginTransaction, commit, rollback, transactional)
+- Repository factory and custom repository support
+- Query builder creation with Many-to-Many support
+- Multiple Unit of Work management for complex operations
+- Lazy-Ghost proxy creation for efficient lazy loading
 
 ### Unit of Work
 
-The Unit of Work pattern tracks changes to entities and coordinates database writes. It ensures data consistency and optimizes database operations.
+The Unit of Work pattern tracks changes to entities and coordinates database writes. Aurum features an advanced Unit of Work implementation that supports multiple concurrent instances and savepoint-based transactions.
 
 ```php
 class UnitOfWork
@@ -37,14 +46,17 @@ class UnitOfWork
     private array $scheduledInsertions = [];
     private array $scheduledUpdates = [];
     private array $scheduledDeletions = [];
+    private string $unitOfWorkId;
 }
 ```
 
 **Features:**
-- Identity map for entity uniqueness
-- Change tracking for automatic updates
-- Batch operations for performance
-- Transaction management
+- **Identity Map**: Ensures entity uniqueness and prevents duplicate loading
+- **Change Tracking**: Automatically detects modifications to managed entities
+- **Multiple UnitOfWorks**: Support for isolated change tracking sets
+- **Savepoints**: Automatic savepoint creation during flushes within transactions
+- **Batch Operations**: Optimized database writes for better performance
+- **Bidirectional Relationship Handling**: Correctly persists both sides of relationships
 
 ### Metadata System
 

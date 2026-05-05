@@ -233,6 +233,28 @@ php bin/aurum-cli.php migration diff --name="UpdateAllEntities"
 php bin/aurum-cli.php migration diff --entities="User" --output=migrations/custom_user_migration.php
 ```
 
+## Migration Execution
+
+The migrate command applies all pending migrations to your database.
+
+### Basic Usage
+
+```bash
+# Run all pending migrations
+php bin/aurum-cli.php migration migrate
+
+# Run migrations in dry-run mode (no changes executed)
+php bin/aurum-cli.php migration migrate --dry-run
+
+# Run migrations with verbose output
+php bin/aurum-cli.php migration migrate --verbose
+```
+
+### Migration Migrate Options
+
+- `--dry-run` - Preview changes without executing them
+- `--verbose, -v` - Show detailed output during execution
+
 ## Configuration
 
 ### Project Configuration
@@ -407,6 +429,9 @@ php bin/aurum-cli.php schema generate --help
 
 # Migration diff help  
 php bin/aurum-cli.php migration diff --help
+
+# Migration migrate help
+php bin/aurum-cli.php migration migrate --help
 ```
 
 ### Examples in Help

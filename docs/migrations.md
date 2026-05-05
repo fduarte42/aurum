@@ -101,7 +101,20 @@ migrations/
 
 ### Running Migrations
 
-```php
+#### Using the CLI (Recommended)
+
+```bash
+# Run all pending migrations
+php bin/aurum-cli.php migration migrate
+
+# Dry-run mode (preview changes)
+php bin/aurum-cli.php migration migrate --dry-run
+
+# Verbose output
+php bin/aurum-cli.php migration migrate --verbose
+```
+
+#### Programmatic Usage
 use Fduarte42\Aurum\Migration\MigrationService;
 
 $migrationService = MigrationService::create($connection);

@@ -67,32 +67,20 @@ class User
 {
     #[Id]
     #[Column(type: 'uuid')]
-    private ?string $id = null;
-
-    #[Column(type: 'string', length: 255, unique: true)]
-    private string $email;
-
-    #[Column(type: 'string', length: 255)]
-    private string $name;
+    public private(set) ?string $id = null;
 
     #[Column(type: 'datetime')]
-    private \DateTime $createdAt;
+    public private(set) \DateTimeImmutable $createdAt;
 
-    public function __construct(string $email, string $name)
-    {
-        $this->email = $email;
-        $this->name = $name;
-        $this->createdAt = new \DateTime();
+    public function __construct(
+        #[Column(type: 'string', length: 255, unique: true)]
+        public string $email,
+
+        #[Column(type: 'string', length: 255)]
+        public string $name
+    ) {
+        $this->createdAt = new \DateTimeImmutable();
     }
-
-    // Getters and setters
-    public function getId(): ?string { return $this->id; }
-    public function getEmail(): string { return $this->email; }
-    public function getName(): string { return $this->name; }
-    public function getCreatedAt(): \DateTime { return $this->createdAt; }
-    
-    public function setEmail(string $email): void { $this->email = $email; }
-    public function setName(string $name): void { $this->name = $name; }
 }
 ```
 
@@ -161,7 +149,33 @@ $entityManager->remove($foundUser);
 $entityManager->flush();
 ```
 
-### 6. Working with Relationships
+### 6. Transactions
+
+Aurum provides a simple and powerful transaction API:
+
+```php
+// Using the transactional helper (recommended)
+$result = $entityManager->transactional(function() use ($entityManager, $user, $todo) {
+    $entityManager->persist($user);
+    $entityManager->persist($todo);
+    $entityManager->flush();
+    
+    return true;
+});
+
+// Manual transaction management
+$entityManager->beginTransaction();
+try {
+    $entityManager->persist($user);
+    $entityManager->flush();
+    $entityManager->commit();
+} catch (\Exception $e) {
+    $entityManager->rollback();
+    throw $e;
+}
+```
+
+### 7. Working with Relationships
 
 Define relationships between entities using attributes:
 
